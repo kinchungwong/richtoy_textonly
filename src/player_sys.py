@@ -1,4 +1,7 @@
 from dataclasses import dataclass
+from typing import Literal
+
+NOBODY: Literal[-1] = -1
 
 @dataclass(frozen=True)
 class PlayerInfo:

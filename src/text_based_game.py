@@ -1,24 +1,55 @@
 import builtins
 import random
-from typing import NamedTuple, Any
+from typing import NamedTuple, Any, Literal
 from dataclasses import dataclass
 
 
 from src.walk_sys import WalkInfo, WalkStatus, WalkSession
-from src.player_sys import PlayerInfo, PlayerStatus, Player
+from src.player_sys import PlayerInfo, PlayerStatus, Player, NOBODY
+from src.board_sys import BoardInfo, BoardStatus, Board
+from src.square_sys import SquareInfo, SquareStatus, Square
 from src.game_sys import GameInfo, GameStatus, Game
 
-
 class TextBasedGame:
+    NUM_SQUARES: Literal[100] = 100
     game: Game
     players: list[Player]
 
     def __init__(self) -> None:
+        board_info, board_status = self.create_board()
         self.game = Game(
-            info=GameInfo(),
-            status=GameStatus(),
+            info=GameInfo(
+                board_info=board_info,
+            ),
+            status=GameStatus(
+                board_status=board_status,
+            ),
         )
         self.players = []
+
+    def init_squares(self) -> list[tuple[SquareInfo, SquareStatus]]:
+        squares: list[tuple[SquareInfo, SquareStatus]] = []
+        for location in range(self.NUM_SQUARES):
+            can_purchase = ((location % 10) != 0)
+            base_land_value = random.randint(10, 20) if can_purchase else 0
+            sqinfo = SquareInfo(
+                location=location,
+                can_purchase=can_purchase,
+                base_land_value=base_land_value,
+            )
+            sqsts = SquareStatus()
+            squares.append((sqinfo, sqsts))
+        return squares
+    
+    def create_board(self) -> tuple[BoardInfo, BoardStatus]:
+        squares = self.init_squares()
+        board_info = BoardInfo(
+            squares_info=tuple(sqinfo for sqinfo, _ in squares),
+        )
+        board_status = BoardStatus(
+            squares_status=list(sqsts for _, sqsts in squares),
+        )
+        return board_info, board_status
 
     def add_player(self, detail: dict[str, Any]) -> int:
         assert type(detail) == dict
@@ -77,9 +108,7 @@ class TextBasedGame:
         self.game.status.cur_walk = self.roll_the_dice()
         while not self.is_walk_finished():
             self.walk_single_step()
-        player = self.game.status.cur_player
-        name = player.info.name
-        print(f"Player {name}, you're now at square {player.status.location}.")
+        self.walk_finished()
 
     def roll_the_dice(self) -> WalkSession:
         cur_round = self.game.status.cur_round
@@ -113,7 +142,24 @@ class TextBasedGame:
         player = self.game.status.cur_player
         pinfo = player.info
         psts = player.status
-        psts.location = (psts.location + 1) % 100
+        psts.location = (psts.location + 1) % self.NUM_SQUARES
+
+    def walk_finished(self):
+        player = self.game.status.cur_player
+        name = player.info.name
+        location = player.status.location
+        print(f"Player {name}, you're now at square {location}.")
+        square = self.game.get_board().get_square(location)
+        can_purchase = square.info.can_purchase
+        owner_index = square.status.owner_index
+        if can_purchase:
+            if owner_index == NOBODY:
+                print(f"This land can be purchased and isn't owned yet.")
+            else:
+                owner = self.players[owner_index]
+                print(f"This land is owned by {owner.info.name}.")
+        else:
+            print(f"You've arrived at a special square.")
 
     def is_game_playing(self) -> bool:
         num_playing = 0
