@@ -2,6 +2,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class WalkInfo:
+    game_round: int
+    player_index: int
     move_points: int
 
 @dataclass()

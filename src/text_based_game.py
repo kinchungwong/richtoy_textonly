@@ -64,7 +64,7 @@ class TextBasedGame:
         player = self.game.status.cur_player
         if not player.status.is_playing:
             return
-        print(f"round {(cur_round + 1)}, player {(player.info.index + 1)}, name {player.info.name}")
+        print(f"round {(cur_round)}, player {(player.info.index)}, name {player.info.name}")
         if player.status.in_prison:
             self.run_player_prison_turn()
         else:
@@ -74,10 +74,17 @@ class TextBasedGame:
         pass
 
     def run_player_normal_turn(self):
-        walk_session = self.roll_the_dice()
+        self.game.status.cur_walk = self.roll_the_dice()
+        while not self.is_walk_finished():
+            self.walk_single_step()
+        player = self.game.status.cur_player
+        name = player.info.name
+        print(f"Player {name}, you're now at square {player.status.location}.")
 
     def roll_the_dice(self) -> WalkSession:
-        name = self.game.status.cur_player.info.name
+        cur_round = self.game.status.cur_round
+        player = self.game.status.cur_player
+        name = player.info.name
         _ = builtins.input(f"Player {name}, please roll the dice. (Press the enter key.)")
         dices = [
             random.randint(1, 6),
@@ -86,11 +93,28 @@ class TextBasedGame:
         move_points = sum(dices)
         print(f"{name}, you rolled {dices[0]}, {dices[1]}, so you will walk {move_points} squares.")
         walk_session = WalkSession(
-            info=WalkInfo(move_points),
+            info=WalkInfo(
+                game_round=cur_round,
+                player_index=player.info.index,
+                move_points=move_points,
+            ),
             status=WalkStatus(),
         )
         return walk_session
-        
+
+    def walk_single_step(self):
+        if self.is_walk_finished():
+            return
+        gsts = self.game.status
+        walk = gsts.cur_walk
+        winfo = walk.info
+        wsts = walk.status
+        wsts.move_points_used += 1
+        player = self.game.status.cur_player
+        pinfo = player.info
+        psts = player.status
+        psts.location = (psts.location + 1) % 100
+
     def is_game_playing(self) -> bool:
         num_playing = 0
         for player in self.players:
@@ -99,6 +123,15 @@ class TextBasedGame:
                 if num_playing >= 2:
                     return True
         return False
+
+    def is_walk_finished(self) -> bool:
+        gsts = self.game.status
+        walk = gsts.cur_walk
+        if walk is None:
+            return True
+        winfo = walk.info
+        wsts = walk.status
+        return wsts.move_points_used == winfo.move_points
 
 if __name__ == "__main__":
     game = TextBasedGame()

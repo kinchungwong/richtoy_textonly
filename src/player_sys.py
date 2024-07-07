@@ -9,6 +9,7 @@ class PlayerInfo:
 class PlayerStatus:
     is_playing: bool = True
     in_prison: bool = False
+    location: int = 0
 
 @dataclass(frozen=True)
 class Player:
