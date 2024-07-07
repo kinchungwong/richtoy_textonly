@@ -155,6 +155,13 @@ class TextBasedGame:
         if can_purchase:
             if owner_index == NOBODY:
                 print(f"This land can be purchased and isn't owned yet.")
+                land_value = square.get_land_value()
+                print(f"Its current land value is {land_value}.")
+                player_money = player.status.money
+                print(f"You have {player_money} dollars.")
+                can_afford = player_money >= land_value
+                can_afford_str = "can" if can_afford else "cannot"
+                print(f"You {can_afford_str} buy this land.")
             else:
                 owner = self.players[owner_index]
                 print(f"This land is owned by {owner.info.name}.")

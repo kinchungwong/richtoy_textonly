@@ -11,8 +11,16 @@ class SquareInfo:
 @dataclass
 class SquareStatus:
     owner_index: int = NOBODY
+    additive_land_value: int = 0
+    additive_popularity: int = 0
 
 @dataclass(frozen=True)
 class Square:
     info: SquareInfo
     status: SquareStatus
+
+    def get_land_value(self) -> int:
+        base_value = self.info.base_land_value
+        add_value = self.status.additive_land_value
+        percent = 100 + self.status.additive_popularity
+        return ((base_value + add_value) * percent) // 100

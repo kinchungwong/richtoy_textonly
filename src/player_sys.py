@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 NOBODY: Literal[-1] = -1
+STARTING_MONEY: Literal[100] = 100
 
 @dataclass(frozen=True)
 class PlayerInfo:
@@ -13,6 +14,7 @@ class PlayerStatus:
     is_playing: bool = True
     in_prison: bool = False
     location: int = 0
+    money: int = STARTING_MONEY
 
 @dataclass(frozen=True)
 class Player:
