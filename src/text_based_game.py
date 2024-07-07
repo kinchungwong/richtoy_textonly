@@ -74,6 +74,7 @@ class TextBasedGame:
         should_continue = True
         while should_continue:
             should_continue = self.run_single_round()
+        self.summarize_endgame()
 
     def run_single_round(self) -> bool:
         if not self.is_game_playing():
@@ -102,7 +103,8 @@ class TextBasedGame:
             self.run_player_normal_turn()
 
     def run_player_prison_turn(self):
-        pass
+        name = self.game.status.cur_player.info.name
+        print(f"Player {name} is in prison.")
 
     def run_player_normal_turn(self):
         self.game.status.cur_walk = self.roll_the_dice()
@@ -153,29 +155,73 @@ class TextBasedGame:
         can_purchase = square.info.can_purchase
         owner_index = square.status.owner_index
         if can_purchase:
+            land_value = square.get_land_value()
+            land_rent = square.get_rent()
+            player_money = player.status.money
+            can_afford = player_money >= land_value
             if owner_index == NOBODY:
                 print(f"This land can be purchased and isn't owned yet.")
-                land_value = square.get_land_value()
                 print(f"Its current land value is {land_value}.")
-                player_money = player.status.money
                 print(f"You have {player_money} dollars.")
-                can_afford = player_money >= land_value
-                can_afford_str = "can" if can_afford else "cannot"
-                print(f"You {can_afford_str} buy this land.")
+                if can_afford:
+                    print(f"You can buy this land. Do you want to?")
+                    print(f"I hear you say yes.")
+                    player.status.money -= land_value
+                    square.status.owner_index = player.info.index
+                    print(f"Square {location} is now yours.")
+                    ### Reload new value
+                    player_money = player.status.money
+                    print(f"You now have {player_money} dollars.")
+                else:
+                    print(f"You do not have the money to buy this land.")
+            elif owner_index == player.info.index:
+                print(f"You own this land.")
             else:
                 owner = self.players[owner_index]
                 print(f"This land is owned by {owner.info.name}.")
+                print(f"You must pay rent, which is {land_rent}.")
+                if player.status.money >= land_rent:
+                    player.status.money -= land_rent
+                    owner.status.money += land_rent
+                    ### Reload new value
+                    player_money = player.status.money
+                    print(f"You now have {player_money} dollars.")
+                else:
+                    print(f"Unfortunately, you don't have the money to pay rent, therefore you are now in prison.")
+                    player.status.in_prison = True
         else:
             print(f"You've arrived at a special square.")
 
     def is_game_playing(self) -> bool:
         num_playing = 0
         for player in self.players:
-            if player.status.is_playing:
+            if player.status.is_playing and not player.status.in_prison:
                 num_playing += 1
                 if num_playing >= 2:
                     return True
         return False
+
+    def summarize_endgame(self):
+        total_players = len(self.players)
+        num_quit = 0
+        num_in_prison = 0
+        players_active: list[Player] = []
+        for player in self.players:
+            if not player.status.is_playing:
+                num_quit += 1
+            elif player.status.in_prison:
+                num_in_prison += 1
+            else:
+                players_active.append(player)
+        if num_quit == total_players:
+            print("Game ended. All players have quit.")
+        elif num_in_prison == total_players:
+            print("Game ended. All players are in prison.")
+        elif len(players_active) == 1:
+            winner = players_active[0]
+            winner_name = winner.info.name
+            money = winner.status.money
+            print(f"Game is won by {winner_name}, with {money} dollars at the end.")
 
     def is_walk_finished(self) -> bool:
         gsts = self.game.status

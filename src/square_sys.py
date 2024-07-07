@@ -24,3 +24,6 @@ class Square:
         add_value = self.status.additive_land_value
         percent = 100 + self.status.additive_popularity
         return ((base_value + add_value) * percent) // 100
+
+    def get_rent(self) -> int:
+        return max(1, self.get_land_value() // 10)
