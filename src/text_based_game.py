@@ -9,11 +9,13 @@ from src.player_sys import PlayerInfo, PlayerStatus, Player, NOBODY
 from src.board_sys import BoardInfo, BoardStatus, Board
 from src.square_sys import SquareInfo, SquareStatus, Square
 from src.game_sys import GameInfo, GameStatus, Game
+from src.textio_sys import TextInputOutputBase, DefaultTextInputOutput, BroadcastTextInputOutput
 
 class TextBasedGame:
     NUM_SQUARES: Literal[100] = 100
     game: Game
     players: list[Player]
+    broadcast: BroadcastTextInputOutput
 
     def __init__(self) -> None:
         board_info, board_status = self.create_board()
@@ -26,6 +28,7 @@ class TextBasedGame:
             ),
         )
         self.players = []
+        self.broadcast = BroadcastTextInputOutput()
 
     def init_squares(self) -> list[tuple[SquareInfo, SquareStatus]]:
         squares: list[tuple[SquareInfo, SquareStatus]] = []
@@ -58,16 +61,20 @@ class TextBasedGame:
         detail["index"] = index
         player = self._create_player_instance(detail)
         self.players.append(player)
+        self.broadcast.add(player.textio)
 
     def _create_player_instance(self, detail: dict[str, Any]) -> Player:
         assert type(detail) == dict
         info_kw_list = set(["name", "index"])
         status_kw_list = set([])
+        player_kw_list = set(["textio"])
         info_detail = { k:v for k, v in detail.items() if k in info_kw_list }
         status_detail = { k:v for k, v in detail.items() if k in status_kw_list }
+        player_detail = { k:v for k, v in detail.items() if k in player_kw_list }
         return Player(
             info=PlayerInfo(**info_detail),
             status=PlayerStatus(**status_detail),
+            **player_detail,
         )
 
     def run_main(self):
@@ -96,33 +103,36 @@ class TextBasedGame:
         player = self.game.status.cur_player
         if not player.status.is_playing:
             return
-        print(f"round {(cur_round)}, player {(player.info.index)}, name {player.info.name}")
+        player.textio.print(f"round {(cur_round)}, player {(player.info.index)}, name {player.info.name}")
         if player.status.in_prison:
             self.run_player_prison_turn()
         else:
             self.run_player_normal_turn()
 
     def run_player_prison_turn(self):
-        name = self.game.status.cur_player.info.name
-        print(f"Player {name} is in prison.")
+        player = self.game.status.cur_player
+        name = player.info.name
+        player.textio.print(f"Player {name} is in prison.")
 
     def run_player_normal_turn(self):
         self.game.status.cur_walk = self.roll_the_dice()
         while not self.is_walk_finished():
             self.walk_single_step()
         self.walk_finished()
+        self.game.status.cur_walk = None
 
     def roll_the_dice(self) -> WalkSession:
         cur_round = self.game.status.cur_round
         player = self.game.status.cur_player
         name = player.info.name
-        _ = builtins.input(f"Player {name}, please roll the dice. (Press the enter key.)")
+        player.textio.print(f"Player {name}, please roll the dice. (Press the enter key.)")
+        _ = player.textio.input()
         dices = [
             random.randint(1, 6),
             random.randint(1, 6),
         ]
         move_points = sum(dices)
-        print(f"{name}, you rolled {dices[0]}, {dices[1]}, so you will walk {move_points} squares.")
+        player.textio.print(f"{name}, you rolled {dices[0]}, {dices[1]}, so you will walk {move_points} squares.")
         walk_session = WalkSession(
             info=WalkInfo(
                 game_round=cur_round,
@@ -150,7 +160,7 @@ class TextBasedGame:
         player = self.game.status.cur_player
         name = player.info.name
         location = player.status.location
-        print(f"Player {name}, you're now at square {location}.")
+        player.textio.print(f"Player {name}, you're now at square {location}.")
         square = self.game.get_board().get_square(location)
         can_purchase = square.info.can_purchase
         owner_index = square.status.owner_index
@@ -160,37 +170,40 @@ class TextBasedGame:
             player_money = player.status.money
             can_afford = player_money >= land_value
             if owner_index == NOBODY:
-                print(f"This land can be purchased and isn't owned yet.")
-                print(f"Its current land value is {land_value}.")
-                print(f"You have {player_money} dollars.")
+                player.textio.print(f"This land can be purchased and isn't owned yet.")
+                player.textio.print(f"Its current land value is {land_value}.")
+                player.textio.print(f"You have {player_money} dollars.")
                 if can_afford:
-                    print(f"You can buy this land. Do you want to?")
-                    print(f"I hear you say yes.")
+                    player.textio.print(f"You can buy this land. Do you want to?")
+                    player.textio.print(f"I hear you say yes.")
                     player.status.money -= land_value
                     square.status.owner_index = player.info.index
-                    print(f"Square {location} is now yours.")
+                    player.textio.print(f"Square {location} is now yours.")
                     ### Reload new value
                     player_money = player.status.money
-                    print(f"You now have {player_money} dollars.")
+                    player.textio.print(f"You now have {player_money} dollars.")
                 else:
-                    print(f"You do not have the money to buy this land.")
+                    player.textio.print(f"You do not have the money to buy this land.")
             elif owner_index == player.info.index:
-                print(f"You own this land.")
+                player.textio.print(f"You own this land.")
             else:
                 owner = self.players[owner_index]
-                print(f"This land is owned by {owner.info.name}.")
-                print(f"You must pay rent, which is {land_rent}.")
+                owner_name = owner.info.name
+                player.textio.print(f"This land is owned by {owner_name}.")
+                player.textio.print(f"You must pay rent, which is {land_rent}.")
                 if player.status.money >= land_rent:
                     player.status.money -= land_rent
                     owner.status.money += land_rent
                     ### Reload new value
                     player_money = player.status.money
-                    print(f"You now have {player_money} dollars.")
+                    player.textio.print(f"You now have {player_money} dollars.")
+                    owner.textio.print(f"Player {player.info.name} has paid you {land_rent} dollars of rent.")
                 else:
-                    print(f"Unfortunately, you don't have the money to pay rent, therefore you are now in prison.")
+                    player.textio.print(f"Unfortunately, you don't have the money to pay rent, therefore you are now in prison.")
+                    owner.textio.print(f"Player {player.info.name} was unable to pay the rent of {land_rent} dollars, and was sent to prison.")
                     player.status.in_prison = True
         else:
-            print(f"You've arrived at a special square.")
+            player.textio.print(f"You've arrived at a special square.")
 
     def is_game_playing(self) -> bool:
         num_playing = 0
@@ -214,14 +227,14 @@ class TextBasedGame:
             else:
                 players_active.append(player)
         if num_quit == total_players:
-            print("Game ended. All players have quit.")
+            self.broadcast.print("Game ended. All players have quit.")
         elif num_in_prison == total_players:
-            print("Game ended. All players are in prison.")
+            self.broadcast.print("Game ended. All players are in prison.")
         elif len(players_active) == 1:
             winner = players_active[0]
             winner_name = winner.info.name
             money = winner.status.money
-            print(f"Game is won by {winner_name}, with {money} dollars at the end.")
+            self.broadcast.print(f"Game is won by {winner_name}, with {money} dollars at the end.")
 
     def is_walk_finished(self) -> bool:
         gsts = self.game.status
@@ -234,16 +247,17 @@ class TextBasedGame:
 
 if __name__ == "__main__":
     game = TextBasedGame()
-    game.add_player({
-        "name": "Alpha"
-    })
-    game.add_player({
-        "name": "Beta"
-    })
-    game.add_player({
-        "name": "Gamma"
-    })
-    game.add_player({
-        "name": "Delta"
-    })
+    textio = DefaultTextInputOutput()
+    auto_enter = True
+    names = [
+        "Alpha",
+        "Beta",
+        "Gamma",
+        "Delta",
+    ]
+    for name in names:
+        game.add_player({
+            "name": name,
+            "textio": DefaultTextInputOutput(print_prefix=name, auto_enter=auto_enter),
+        })
     game.run_main()

@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Literal
 
+from src.textio_sys import TextInputOutputBase
+
 NOBODY: Literal[-1] = -1
 STARTING_MONEY: Literal[100] = 100
 
@@ -20,3 +22,4 @@ class PlayerStatus:
 class Player:
     info: PlayerInfo
     status: PlayerStatus
+    textio: TextInputOutputBase
