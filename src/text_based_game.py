@@ -162,15 +162,17 @@ class TextBasedGame:
         ### Has not been completely proof-read.
         ###
         player = self.game.status.cur_player
-        name = player.info.name
+        player_io = player.textio
         location = player.status.location
         square = self.game.get_board().get_square(location)
         can_purchase = square.info.can_purchase
+        is_special_square = not can_purchase
         owner_index = square.status.owner_index if can_purchase else NOBODY
         has_owner = owner_index != NOBODY
         owner = self.players[owner_index] if has_owner else None
         owner_is_player = has_owner and (owner_index == player.info.index)
         owner_name = owner.info.name if has_owner else "STR_POISON_VALUE"
+        owner_io = owner.textio if has_owner else None
         land_value = square.get_land_value() if can_purchase else None
         land_rent = square.get_rent() if can_purchase else None
         player_money = player.status.money
@@ -194,18 +196,18 @@ class TextBasedGame:
             assert will_go_to_prison
             player.status.in_prison = True
         def land_info_io():
-            player.textio.print(f"This land can be purchased and isn't owned yet.")
-            player.textio.print(f"Its current land value is {land_value}.")
-            player.textio.print(f"You have {player_money} dollars.")
+            player_io.print(f"This land can be purchased and isn't owned yet.")
+            player_io.print(f"Its current land value is {land_value}.")
+            player_io.print(f"You have {player_money} dollars.")
         def land_purchase_offer_io():
             assert can_purchase_now
-            player.textio.print(f"You can buy this land. Do you want to?")
+            player_io.print(f"You can buy this land. Do you want to?")
         def land_purchase_accepted_io():
             assert can_purchase_now
             # NOTE player_money has been updated to the new value
-            player.textio.print(f"I hear you say yes.")
-            player.textio.print(f"Square {location} is now yours.")
-            player.textio.print(f"You now have {player_money} dollars.")
+            player_io.print(f"I hear you say yes.")
+            player_io.print(f"Square {location} is now yours.")
+            player_io.print(f"You now have {player_money} dollars.")
         def land_purchase_declined_tx():
             assert can_purchase_now
             # NOTE future design, not implemented yet.
@@ -213,24 +215,31 @@ class TextBasedGame:
                 player.status.patience += 1
         def land_purchase_declined_io():
             assert can_purchase_now
-            player.textio.print(f"What a careful decision. May your wisdon grow each day.")
+            player_io.print(f"What a careful decision. May your wisdon grow each day.")
         def rent_info_io():
+            assert has_owner
+            assert not owner_is_player
             assert need_pay_rent
-            player.textio.print(f"This land is owned by {owner_name}.")
-            player.textio.print(f"You must pay rent, which is {land_rent}.")
+            player_io.print(f"This land is owned by {owner_name}.")
+            player_io.print(f"You must pay rent, which is {land_rent}.")
         def rent_pay_success_io():
+            assert has_owner
+            assert not owner_is_player
             assert need_pay_rent
             assert can_pay_rent_now
-            player.textio.print(f"You now have {player_money} dollars.")
-            owner.textio.print(f"Player {player.info.name} has paid you {land_rent} dollars of rent.")
+            player_io.print(f"You now have {player_money} dollars.")
+            owner_io.print(f"Player {player.info.name} has paid you {land_rent} dollars of rent.")
         def rent_pay_failure_io():
+            assert has_owner
+            assert not owner_is_player
             assert need_pay_rent
             assert not can_pay_rent_now
             assert will_go_to_prison
-            player.textio.print(f"Unfortunately, you don't have the money to pay rent, therefore you are now in prison.")
-            owner.textio.print(f"Player {player.info.name} was unable to pay the rent of {land_rent} dollars, and was sent to prison.")
+            player_io.print(f"Unfortunately, you don't have the money to pay rent, therefore you are now in prison.")
+            owner_io.print(f"Player {player.info.name} was unable to pay the rent of {land_rent} dollars, and was sent to prison.")
         def special_square_io():
-            player.textio.print(f"You've arrived at a special square.")
+            assert is_special_square
+            player_io.print(f"You've arrived at a special square.")
 
     def walk_finished(self):
         ###
