@@ -156,7 +156,87 @@ class TextBasedGame:
         psts = player.status
         psts.location = (psts.location + 1) % self.NUM_SQUARES
 
+    def on_walk_finished(self):
+        ###
+        ### New version, work in progress.
+        ### Has not been completely proof-read.
+        ###
+        player = self.game.status.cur_player
+        name = player.info.name
+        location = player.status.location
+        square = self.game.get_board().get_square(location)
+        can_purchase = square.info.can_purchase
+        owner_index = square.status.owner_index if can_purchase else NOBODY
+        has_owner = owner_index != NOBODY
+        owner = self.players[owner_index] if has_owner else None
+        owner_is_player = has_owner and (owner_index == player.info.index)
+        owner_name = owner.info.name if has_owner else "STR_POISON_VALUE"
+        land_value = square.get_land_value() if can_purchase else None
+        land_rent = square.get_rent() if can_purchase else None
+        player_money = player.status.money
+        can_purchase_now = can_purchase and not has_owner and (player_money >= land_value)
+        need_pay_rent = has_owner and not owner_is_player and not owner.status.in_prison
+        can_pay_rent_now = need_pay_rent and (player_money >= land_rent)
+        will_go_to_prison = need_pay_rent and not can_pay_rent_now
+        def land_purchase_tx():
+            assert can_purchase_now
+            nonlocal player_money
+            player.status.money -= land_value
+            square.status.owner_index = player.info.index
+            player_money = player.status.money
+        def pay_rent_tx():
+            assert can_pay_rent_now
+            nonlocal player_money
+            player.status.money -= land_rent
+            owner.status.money += land_rent
+            player_money = player.status.money
+        def go_to_prison_tx():
+            assert will_go_to_prison
+            player.status.in_prison = True
+        def land_info_io():
+            player.textio.print(f"This land can be purchased and isn't owned yet.")
+            player.textio.print(f"Its current land value is {land_value}.")
+            player.textio.print(f"You have {player_money} dollars.")
+        def land_purchase_offer_io():
+            assert can_purchase_now
+            player.textio.print(f"You can buy this land. Do you want to?")
+        def land_purchase_accepted_io():
+            assert can_purchase_now
+            # NOTE player_money has been updated to the new value
+            player.textio.print(f"I hear you say yes.")
+            player.textio.print(f"Square {location} is now yours.")
+            player.textio.print(f"You now have {player_money} dollars.")
+        def land_purchase_declined_tx():
+            assert can_purchase_now
+            # NOTE future design, not implemented yet.
+            if hasattr(player.status, "patience"):
+                player.status.patience += 1
+        def land_purchase_declined_io():
+            assert can_purchase_now
+            player.textio.print(f"What a careful decision. May your wisdon grow each day.")
+        def rent_info_io():
+            assert need_pay_rent
+            player.textio.print(f"This land is owned by {owner_name}.")
+            player.textio.print(f"You must pay rent, which is {land_rent}.")
+        def rent_pay_success_io():
+            assert need_pay_rent
+            assert can_pay_rent_now
+            player.textio.print(f"You now have {player_money} dollars.")
+            owner.textio.print(f"Player {player.info.name} has paid you {land_rent} dollars of rent.")
+        def rent_pay_failure_io():
+            assert need_pay_rent
+            assert not can_pay_rent_now
+            assert will_go_to_prison
+            player.textio.print(f"Unfortunately, you don't have the money to pay rent, therefore you are now in prison.")
+            owner.textio.print(f"Player {player.info.name} was unable to pay the rent of {land_rent} dollars, and was sent to prison.")
+        def special_square_io():
+            player.textio.print(f"You've arrived at a special square.")
+
     def walk_finished(self):
+        ###
+        ### Old version.
+        ### See "on_walk_finished()" which is the new version.
+        ###
         player = self.game.status.cur_player
         name = player.info.name
         location = player.status.location
