@@ -25,5 +25,10 @@ class Square:
         percent = 100 + self.status.additive_popularity
         return ((base_value + add_value) * percent) // 100
 
+    def get_mortgage_value(self) -> int:
+        # Mortgage value disregards development and popularity.
+        base_value = self.info.base_land_value
+        return base_value // 2
+
     def get_rent(self) -> int:
         return max(1, self.get_land_value() // 10)

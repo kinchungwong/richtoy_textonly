@@ -17,6 +17,7 @@ class Mini:
     from src.minihelps.ver0.land_info import LandInfo
     from src.minigames.ver0.land_purchase import LandPurchase
     from src.minigames.ver0.rent_pay import RentPay
+    from src.minigames.ver0.roll_before_walk import RollBeforeWalk
 
 mini = Mini()
 
@@ -130,27 +131,41 @@ class TextBasedGame:
         self.on_walk_finished()
         self.game.status.cur_walk = None
 
+
     def roll_the_dice(self) -> WalkSession:
-        cur_round = self.game.status.cur_round
+        game_round = self.game.status.cur_round
         player = self.game.status.cur_player
-        name = player.info.name
-        player.textio.print(f"Player {name}, please roll the dice. (Press the enter key.)")
-        _ = player.textio.input()
-        dices = [
-            random.randint(1, 6),
-            random.randint(1, 6),
-        ]
-        move_points = sum(dices)
-        player.textio.print(f"{name}, you rolled {dices[0]}, {dices[1]}, so you will walk {move_points} squares.")
-        walk_session = WalkSession(
-            info=WalkInfo(
-                game_round=cur_round,
-                player_index=player.info.index,
-                move_points=move_points,
-            ),
-            status=WalkStatus(),
+        roll_before_walk = mini.RollBeforeWalk(
+            game_round=game_round,
+            player=player,
+            board=self.game.get_board(),
+            broadcast_io=self.broadcast,
         )
+        roll_before_walk.run()
+        walk_session = roll_before_walk.walk_session
         return walk_session
+
+    # def roll_the_dice(self) -> WalkSession:
+    #     cur_round = self.game.status.cur_round
+    #     player = self.game.status.cur_player
+    #     name = player.info.name
+    #     player.textio.print(f"Player {name}, please roll the dice. (Press the enter key.)")
+    #     _ = player.textio.input()
+    #     dices = [
+    #         random.randint(1, 6),
+    #         random.randint(1, 6),
+    #     ]
+    #     move_points = sum(dices)
+    #     player.textio.print(f"{name}, you rolled {dices[0]}, {dices[1]}, so you will walk {move_points} squares.")
+    #     walk_session = WalkSession(
+    #         info=WalkInfo(
+    #             game_round=cur_round,
+    #             player_index=player.info.index,
+    #             move_points=move_points,
+    #         ),
+    #         status=WalkStatus(),
+    #     )
+    #     return walk_session
 
     def walk_single_step(self):
         if self.is_walk_finished():
@@ -242,7 +257,25 @@ if __name__ == "__main__":
                 builtins.print(f"[[HISTORY_PARSED_MENU_INFO]] {hist_str}")
         return builtins.input()
     humanio = AgentHistoryTextInputOutput(human_input_fn)
-    auto_enter = True
+    def smart_auntie_fn(history: TextInputOutputHistory) -> str:
+        can_roll_dice = False
+        can_auto_purchase = False
+        for hist_str in history.tail(menus_only=True):
+            if "[[ALP]]" in hist_str:
+                can_auto_purchase = True
+                break # for(hist_str)
+            if "[[RTD]]" in hist_str:
+                can_roll_dice = True
+                break # for(hist_str)
+        if can_roll_dice:
+            return "RTD"
+        if can_auto_purchase:
+            return "ALP"
+        else:
+            builtins.print("[[HUMAN_INPUT_REQUIRED]]")
+            return builtins.input()
+    smart_auntie_io = AgentHistoryTextInputOutput(smart_auntie_fn)
+    # auto_enter = True
     names = [
         "Alpha",
         "Beta",
@@ -256,6 +289,7 @@ if __name__ == "__main__":
     for name in names:
         game.add_player({
             "name": name,
-            "textio": DefaultTextInputOutput(print_prefix=name, auto_enter=auto_enter),
+            # "textio": DefaultTextInputOutput(print_prefix=name, auto_enter=auto_enter),
+            "textio": smart_auntie_io,
         })
     game.run_main()
