@@ -18,6 +18,7 @@ class Mini:
     from src.minigames.ver0.land_purchase import LandPurchase
     from src.minigames.ver0.rent_pay import RentPay
     from src.minigames.ver0.roll_before_walk import RollBeforeWalk
+    from src.minigames.ver0.inside_prison import InsidePrison
 
 mini = Mini()
 
@@ -121,8 +122,11 @@ class TextBasedGame:
 
     def run_player_prison_turn(self):
         player = self.game.status.cur_player
-        name = player.info.name
-        player.textio.print(f"Player {name} is in prison.")
+        inside_prison = mini.InsidePrison(
+            player=player, 
+            broadcast_io=self.broadcast,
+        )
+        inside_prison.run()
 
     def run_player_normal_turn(self):
         self.game.status.cur_walk = self.roll_the_dice()
@@ -130,7 +134,6 @@ class TextBasedGame:
             self.walk_single_step()
         self.on_walk_finished()
         self.game.status.cur_walk = None
-
 
     def roll_the_dice(self) -> WalkSession:
         game_round = self.game.status.cur_round
@@ -144,28 +147,6 @@ class TextBasedGame:
         roll_before_walk.run()
         walk_session = roll_before_walk.walk_session
         return walk_session
-
-    # def roll_the_dice(self) -> WalkSession:
-    #     cur_round = self.game.status.cur_round
-    #     player = self.game.status.cur_player
-    #     name = player.info.name
-    #     player.textio.print(f"Player {name}, please roll the dice. (Press the enter key.)")
-    #     _ = player.textio.input()
-    #     dices = [
-    #         random.randint(1, 6),
-    #         random.randint(1, 6),
-    #     ]
-    #     move_points = sum(dices)
-    #     player.textio.print(f"{name}, you rolled {dices[0]}, {dices[1]}, so you will walk {move_points} squares.")
-    #     walk_session = WalkSession(
-    #         info=WalkInfo(
-    #             game_round=cur_round,
-    #             player_index=player.info.index,
-    #             move_points=move_points,
-    #         ),
-    #         status=WalkStatus(),
-    #     )
-    #     return walk_session
 
     def walk_single_step(self):
         if self.is_walk_finished():
@@ -190,10 +171,9 @@ class TextBasedGame:
             if land_info.can_purchase_now:
                 land_purchase = mini.LandPurchase(land_info=land_info)
                 land_purchase.run()
-            if land_info.can_pay_rent_now:
+            elif land_info.need_pay_rent:
                 rent_pay = mini.RentPay(land_info=land_info, player=player, square=square, owner=owner, broadcast_io=self.broadcast)
-            # elif land_info.will_go_to_prison:
-            #     go_prison = OwedRentGoingToPrisonVer0(player, square, owner, self.broadcast)
+                rent_pay.run()
             else:
                 pass
 
@@ -275,21 +255,23 @@ if __name__ == "__main__":
             builtins.print("[[HUMAN_INPUT_REQUIRED]]")
             return builtins.input()
     smart_auntie_io = AgentHistoryTextInputOutput(smart_auntie_fn)
-    # auto_enter = True
-    names = [
-        "Alpha",
-        "Beta",
-        "Gamma",
-        "Delta",
-    ]
-    game.add_player({
-        "name": "human",
-        "textio": humanio,
-    })
-    for name in names:
+    if False:
         game.add_player({
-            "name": name,
-            # "textio": DefaultTextInputOutput(print_prefix=name, auto_enter=auto_enter),
-            "textio": smart_auntie_io,
+            "name": "human",
+            "textio": humanio,
         })
+    if True:
+        # auto_enter = True
+        names = [
+            "Alpha",
+            "Beta",
+            "Gamma",
+            "Delta",
+        ]
+        for name in names:
+            game.add_player({
+                "name": name,
+                # "textio": DefaultTextInputOutput(print_prefix=name, auto_enter=auto_enter),
+                "textio": smart_auntie_io,
+            })
     game.run_main()
