@@ -1,6 +1,5 @@
 import builtins
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
 
 class TextInputOutputBase(ABC):
     @abstractmethod
