@@ -1,6 +1,6 @@
 import builtins
 import random
-from typing import NamedTuple, Any, Literal
+from typing import NamedTuple, Any, Literal, Optional
 from dataclasses import dataclass
 
 
@@ -9,13 +9,22 @@ from src.player_sys import PlayerInfo, PlayerStatus, Player, NOBODY
 from src.board_sys import BoardInfo, BoardStatus, Board
 from src.square_sys import SquareInfo, SquareStatus, Square
 from src.game_sys import GameInfo, GameStatus, Game
-from src.textio_sys import TextInputOutputBase, DefaultTextInputOutput, BroadcastTextInputOutput
+from src.textio_sys import DefaultTextInputOutput, BroadcastTextInputOutput
+from src.textio_agent_sys import AgentHistoryTextInputOutput, TextInputOutputHistory
+
+class Mini:
+    from src.minihelps.ver0.square_info import SquareInfo
+    from src.minihelps.ver0.land_info import LandInfo
+    from src.minigames.ver0.land_purchase import LandPurchase
+    from src.minigames.ver0.rent_pay import RentPay
+
+mini = Mini()
 
 class TextBasedGame:
     NUM_SQUARES: Literal[100] = 100
     game: Game
     players: list[Player]
-    broadcast: BroadcastTextInputOutput
+    broadcast: BroadcastTextInputOutput ### TODO rename to "broadcast_io"
 
     def __init__(self) -> None:
         board_info, board_status = self.create_board()
@@ -118,7 +127,7 @@ class TextBasedGame:
         self.game.status.cur_walk = self.roll_the_dice()
         while not self.is_walk_finished():
             self.walk_single_step()
-        self.walk_finished()
+        self.on_walk_finished()
         self.game.status.cur_walk = None
 
     def roll_the_dice(self) -> WalkSession:
@@ -157,142 +166,30 @@ class TextBasedGame:
         psts.location = (psts.location + 1) % self.NUM_SQUARES
 
     def on_walk_finished(self):
-        ###
-        ### New version, work in progress.
-        ### Has not been completely proof-read.
-        ###
         player = self.game.status.cur_player
-        player_io = player.textio
-        location = player.status.location
-        square = self.game.get_board().get_square(location)
-        can_purchase = square.info.can_purchase
-        is_special_square = not can_purchase
-        owner_index = square.status.owner_index if can_purchase else NOBODY
-        has_owner = owner_index != NOBODY
-        owner = self.players[owner_index] if has_owner else None
-        owner_is_player = has_owner and (owner_index == player.info.index)
-        owner_name = owner.info.name if has_owner else "STR_POISON_VALUE"
-        owner_io = owner.textio if has_owner else None
-        land_value = square.get_land_value() if can_purchase else None
-        land_rent = square.get_rent() if can_purchase else None
-        player_money = player.status.money
-        can_purchase_now = can_purchase and not has_owner and (player_money >= land_value)
-        need_pay_rent = has_owner and not owner_is_player and not owner.status.in_prison
-        can_pay_rent_now = need_pay_rent and (player_money >= land_rent)
-        will_go_to_prison = need_pay_rent and not can_pay_rent_now
-        def land_purchase_tx():
-            assert can_purchase_now
-            nonlocal player_money
-            player.status.money -= land_value
-            square.status.owner_index = player.info.index
-            player_money = player.status.money
-        def pay_rent_tx():
-            assert can_pay_rent_now
-            nonlocal player_money
-            player.status.money -= land_rent
-            owner.status.money += land_rent
-            player_money = player.status.money
-        def go_to_prison_tx():
-            assert will_go_to_prison
-            player.status.in_prison = True
-        def land_info_io():
-            player_io.print(f"This land can be purchased and isn't owned yet.")
-            player_io.print(f"Its current land value is {land_value}.")
-            player_io.print(f"You have {player_money} dollars.")
-        def land_purchase_offer_io():
-            assert can_purchase_now
-            player_io.print(f"You can buy this land. Do you want to?")
-        def land_purchase_accepted_io():
-            assert can_purchase_now
-            # NOTE player_money has been updated to the new value
-            player_io.print(f"I hear you say yes.")
-            player_io.print(f"Square {location} is now yours.")
-            player_io.print(f"You now have {player_money} dollars.")
-        def land_purchase_declined_tx():
-            assert can_purchase_now
-            # NOTE future design, not implemented yet.
-            if hasattr(player.status, "patience"):
-                player.status.patience += 1
-        def land_purchase_declined_io():
-            assert can_purchase_now
-            player_io.print(f"What a careful decision. May your wisdon grow each day.")
-        def rent_info_io():
-            assert has_owner
-            assert not owner_is_player
-            assert need_pay_rent
-            player_io.print(f"This land is owned by {owner_name}.")
-            player_io.print(f"You must pay rent, which is {land_rent}.")
-        def rent_pay_success_io():
-            assert has_owner
-            assert not owner_is_player
-            assert need_pay_rent
-            assert can_pay_rent_now
-            player_io.print(f"You now have {player_money} dollars.")
-            owner_io.print(f"Player {player.info.name} has paid you {land_rent} dollars of rent.")
-        def rent_pay_failure_io():
-            assert has_owner
-            assert not owner_is_player
-            assert need_pay_rent
-            assert not can_pay_rent_now
-            assert will_go_to_prison
-            player_io.print(f"Unfortunately, you don't have the money to pay rent, therefore you are now in prison.")
-            owner_io.print(f"Player {player.info.name} was unable to pay the rent of {land_rent} dollars, and was sent to prison.")
-        def special_square_io():
-            assert is_special_square
-            player_io.print(f"You've arrived at a special square.")
-
-    def walk_finished(self):
-        ###
-        ### Old version.
-        ### See "on_walk_finished()" which is the new version.
-        ###
-        player = self.game.status.cur_player
-        name = player.info.name
-        location = player.status.location
-        player.textio.print(f"Player {name}, you're now at square {location}.")
-        square = self.game.get_board().get_square(location)
-        can_purchase = square.info.can_purchase
-        owner_index = square.status.owner_index
-        if can_purchase:
-            land_value = square.get_land_value()
-            land_rent = square.get_rent()
-            player_money = player.status.money
-            can_afford = player_money >= land_value
-            if owner_index == NOBODY:
-                player.textio.print(f"This land can be purchased and isn't owned yet.")
-                player.textio.print(f"Its current land value is {land_value}.")
-                player.textio.print(f"You have {player_money} dollars.")
-                if can_afford:
-                    player.textio.print(f"You can buy this land. Do you want to?")
-                    player.textio.print(f"I hear you say yes.")
-                    player.status.money -= land_value
-                    square.status.owner_index = player.info.index
-                    player.textio.print(f"Square {location} is now yours.")
-                    ### Reload new value
-                    player_money = player.status.money
-                    player.textio.print(f"You now have {player_money} dollars.")
-                else:
-                    player.textio.print(f"You do not have the money to buy this land.")
-            elif owner_index == player.info.index:
-                player.textio.print(f"You own this land.")
+        square = self.get_square(player.status.location)
+        owner = self.get_owner(square)
+        square_info = mini.SquareInfo(square)
+        if square_info.can_purchase:
+            land_info = mini.LandInfo(player=player, square=square, owner=owner, broadcast_io=self.broadcast)
+            if land_info.can_purchase_now:
+                land_purchase = mini.LandPurchase(land_info=land_info)
+                land_purchase.run()
+            if land_info.can_pay_rent_now:
+                rent_pay = mini.RentPay(land_info=land_info, player=player, square=square, owner=owner, broadcast_io=self.broadcast)
+            # elif land_info.will_go_to_prison:
+            #     go_prison = OwedRentGoingToPrisonVer0(player, square, owner, self.broadcast)
             else:
-                owner = self.players[owner_index]
-                owner_name = owner.info.name
-                player.textio.print(f"This land is owned by {owner_name}.")
-                player.textio.print(f"You must pay rent, which is {land_rent}.")
-                if player.status.money >= land_rent:
-                    player.status.money -= land_rent
-                    owner.status.money += land_rent
-                    ### Reload new value
-                    player_money = player.status.money
-                    player.textio.print(f"You now have {player_money} dollars.")
-                    owner.textio.print(f"Player {player.info.name} has paid you {land_rent} dollars of rent.")
-                else:
-                    player.textio.print(f"Unfortunately, you don't have the money to pay rent, therefore you are now in prison.")
-                    owner.textio.print(f"Player {player.info.name} was unable to pay the rent of {land_rent} dollars, and was sent to prison.")
-                    player.status.in_prison = True
-        else:
-            player.textio.print(f"You've arrived at a special square.")
+                pass
+
+    def get_square(self, location: int) -> Square:
+        return self.game.get_board().get_square(location)
+
+    def get_owner(self, square: Square) -> Optional[Player]:
+        owner_index = square.status.owner_index
+        if 0 <= owner_index < len(self.players):
+            return self.players[owner_index]
+        return None
 
     def is_game_playing(self) -> bool:
         num_playing = 0
@@ -337,6 +234,14 @@ class TextBasedGame:
 if __name__ == "__main__":
     game = TextBasedGame()
     textio = DefaultTextInputOutput()
+    def human_input_fn(history: TextInputOutputHistory) -> str:
+        if False:
+            ### DEBUG ONLY
+            ### This will duplicate the menu print ... 
+            for hist_str in history.tail(menus_only=True):
+                builtins.print(f"[[HISTORY_PARSED_MENU_INFO]] {hist_str}")
+        return builtins.input()
+    humanio = AgentHistoryTextInputOutput(human_input_fn)
     auto_enter = True
     names = [
         "Alpha",
@@ -344,6 +249,10 @@ if __name__ == "__main__":
         "Gamma",
         "Delta",
     ]
+    game.add_player({
+        "name": "human",
+        "textio": humanio,
+    })
     for name in names:
         game.add_player({
             "name": name,
