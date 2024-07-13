@@ -75,10 +75,9 @@ class TextDiagnosticsInternals:
         assert type(idx) == int
         if idx <= 8:
             return True
-        while ((idx & 1) == 0):
+        while (idx >= 16) and ((idx & 1) == 0):
             idx >>= 1
-        # ((1<<n)+1) for n in range() if n != 1
-        return idx in (1, 5, 9, 17)
+        return idx in (0, 3, 7, 12)
 
 
 class TextDiagnosticsHelper:

@@ -1,7 +1,7 @@
 import builtins
-from collections.abc import Sequence, Iterable
+from collections.abc import Iterable
 import itertools
-from typing import Any, Callable, Protocol, NamedTuple, Optional, Union
+from typing import TypeVar
 
 
 from src2.code_utils import *
@@ -33,7 +33,7 @@ class HasPostInitIndex(HasIndex):
         self.index = index
 
 
-class CrossroadBuilder(HasPostInitIndex):
+class Crossroad(HasPostInitIndex):
     """
     Attributes:
         st_lat: int
@@ -55,39 +55,41 @@ class CrossroadBuilder(HasPostInitIndex):
         return f"Crossroad[{self.index}] (at lat={self.st_lat}, lon={self.st_lon})"
 
 
-class StreetBuilder(HasPostInitIndex):
+class Street(HasPostInitIndex):
     """
     Attributes:
-        crossroads: tuple[CrossroadBuilder, CrossroadBuilder] 
+        crossroads: tuple[Crossroad, Crossroad] 
             Identifies the two crossroads that make the beginning and
             the end of the street.
 
-        spaces_in_between: int
+        subspaces_per_street: int
             Number of non-crossroad spaces to be inserted into
             the street, in between the two crossroad spaces.
     """
-    crossroads: tuple[CrossroadBuilder, CrossroadBuilder]
-    spaces_in_between: int
+    crossroads: tuple[Crossroad, Crossroad]
+    subspaces_per_street: int
 
     def __init__(
         self,
-        crossroads: tuple[CrossroadBuilder, CrossroadBuilder],
-        spaces_in_between: int,
+        crossroads: tuple[Crossroad, Crossroad],
+        subspaces_per_street: int,
     ) -> None:
         super().__init__()
         self.crossroads = crossroads
-        self.spaces_in_between = spaces_in_between
+        self.subspaces_per_street = subspaces_per_street
 
     def __str__(self) -> str:
         c1, c2 = self.crossroads
         return f"Street[{self.index}] (between crossroads {c1.index}, {c2.index})"
 
 
-class SpaceBuilder(HasPostInitIndex):
+Space = TypeVar("Space")
+
+class Space(HasPostInitIndex):
     street_index: int
     street_space_index: int
     crossroad_index: int
-    connections: list[int]
+    connections: set[Space]
     
     def __init__(
         self,
@@ -99,7 +101,7 @@ class SpaceBuilder(HasPostInitIndex):
         self.street_index = street_index
         self.street_space_index = street_space_index
         self.crossroad_index = crossroad_index
-        self.connections = []
+        self.connections = set()
         assert self.is_from_street ^ self.is_from_crossroad
 
     @property
@@ -110,20 +112,31 @@ class SpaceBuilder(HasPostInitIndex):
     def is_from_crossroad(self) -> bool:
         return (self.crossroad_index >= 0)
 
-    def connect(self, other_space_index: int) -> None:
+    def connect(self, other: Space) -> None:
+        """Connects two instances of Space, mutually.
+        """
+        assert type(other) == Space
         assert self.index >= 0
-        assert other_space_index >= 0
-        if other_space_index == self.index:
+        assert other.index >= 0
+        if other is self:
             return
-        if other_space_index in self.connections:
+        if other.index == self.index:
             return
-        self.connections.append(other_space_index)
+        if other not in self.connections:
+            self.connections.add(other)
+        if self not in other.connections:
+            other.connections.add(self)
 
     def __str__(self) -> str:
+        num_conns = len(self.connections)
         if self.street_index >= 0:
-            return f"Space[{self.index}] (from street {self.street_index}, subspace {self.street_space_index})"
+            return f"Space[{self.index}] (from street {self.street_index}, subspace {self.street_space_index}, num_conns={num_conns})"
         else:
-            return f"Space[{self.index}] (from crossroad {self.crossroad_index})"
+            return f"Space[{self.index}] (from crossroad {self.crossroad_index}, num_conns={num_conns})"
+
+    def __hash__(self) -> int:
+        assert self.index >= 0
+        return builtins.hash(self.index)
 
 
 class GridMapBuilder(SupportsTextDiagnostics):
@@ -137,31 +150,31 @@ class GridMapBuilder(SupportsTextDiagnostics):
             Number of "vertical", or north-south-going streets.
             These are arranged from left to right.
 
-        spaces_in_between: int
+        subspaces_per_street: int
             Number of usable spaces on each street, excluding
             the crossroad spaces where streets meet together.
 
     Post-init attributes:
-        crossroads: list[list[CrossroadBuilder]]
+        crossroads: list[list[Crossroad]]
             Crossroads are the spaces at the intersection
             of streets, which can be looked up as 
             crossroads[lat][lon]
 
-        lat_streets: list[list[StreetBuilder]]
+        lat_streets: list[list[Street]]
             Streets that are horizontal, or east-west-going.
 
-        lon_streets: list[list[StreetBuilder]]
+        lon_streets: list[list[Street]]
             Streets that are vertical, or north-south-going.
 
-        streets: list[StreetBuilder]
+        streets: list[Street]
             Flattened list of streets containing all of
             lat_streets and lon_streets.
         
-        spaces_by_street: list[list[SpaceBuilder]]
+        spaces_by_street: list[list[Space]]
             Non-crossroad spaces, organized by the streets where
             they are located.
 
-        spaces: list[SpaceBuilder]
+        spaces: list[Space]
             All spaces, including everything in spaces_by_street
             as well as crossroad spaces, the latter of which will
             be assigned item index strictly higher then the former.
@@ -169,26 +182,26 @@ class GridMapBuilder(SupportsTextDiagnostics):
 
     num_lats: int
     num_lons: int
-    spaces_in_between: int
-    crossroads_by_latlon: list[list[CrossroadBuilder]]
-    crossroads: list[CrossroadBuilder]
-    lat_streets: list[list[StreetBuilder]]
-    lon_streets: list[list[StreetBuilder]]
-    streets: list[StreetBuilder]
-    spaces_by_street: list[list[SpaceBuilder]]
-    spaces_from_crossroads: list[SpaceBuilder]
-    spaces: list[SpaceBuilder]
+    subspaces_per_street: int
+    crossroads_by_latlon: list[list[Crossroad]]
+    crossroads: list[Crossroad]
+    lat_streets: list[list[Street]]
+    lon_streets: list[list[Street]]
+    streets: list[Street]
+    spaces_by_street: list[list[Space]]
+    spaces_from_crossroads: list[Space]
+    spaces: list[Space]
 
     def __init__(
         self,
         num_lats: int,
         num_lons: int,
-        spaces_in_between: int,
+        subspaces_per_street: int,
     ) -> None:
         super().__init__()
         self.num_lats = num_lats
         self.num_lons = num_lons
-        self.spaces_in_between = spaces_in_between
+        self.subspaces_per_street = subspaces_per_street
         self.init_crossroads_by_latlon()
         self.init_crossroads_flattened()
         self.init_lat_streets()
@@ -197,12 +210,13 @@ class GridMapBuilder(SupportsTextDiagnostics):
         self.init_spaces_by_street()
         self.init_spaces_from_crossroads()
         self.init_spaces_flattened()
-        self.connect_spaces()
+        self.connect_street_subspaces()
+        self.connect_street_crossroads()
 
     def init_crossroads_by_latlon(self) -> None:
         self.crossroads_by_latlon = [
             [
-                CrossroadBuilder(
+                Crossroad(
                     st_lat=st_lat,
                     st_lon=st_lon,
                 )
@@ -223,12 +237,12 @@ class GridMapBuilder(SupportsTextDiagnostics):
         """
         self.lat_streets = [
             [
-                StreetBuilder(
+                Street(
                     crossroads=(
                         self.crossroads_by_latlon[lat][lon_first],
                         self.crossroads_by_latlon[lat][lon_first+1],
                     ),
-                    spaces_in_between=self.spaces_in_between,
+                    subspaces_per_street=self.subspaces_per_street,
                 )
                 for lon_first in range(self.num_lons - 1)
             ]
@@ -240,12 +254,12 @@ class GridMapBuilder(SupportsTextDiagnostics):
         """
         self.lon_streets = [
             [
-                StreetBuilder(
+                Street(
                     crossroads=(
                         self.crossroads_by_latlon[lat_first][lon],
                         self.crossroads_by_latlon[lat_first+1][lon],
                     ),
-                    spaces_in_between=self.spaces_in_between,
+                    subspaces_per_street=self.subspaces_per_street,
                 )
                 for lon in range(self.num_lons)
             ]
@@ -253,7 +267,7 @@ class GridMapBuilder(SupportsTextDiagnostics):
         ]
 
     def init_streets_flattened(self) -> None:
-        def fn_iter_all_streets() -> Iterable[StreetBuilder]:
+        def fn_iter_all_streets() -> Iterable[Street]:
             for nested_streets_2 in (self.lat_streets, self.lon_streets):
                 for nested_streets in nested_streets_2:
                     yield from nested_streets
@@ -262,20 +276,21 @@ class GridMapBuilder(SupportsTextDiagnostics):
             street.set_index(street_index)
 
     def init_spaces_by_street(self) -> None:
-        self.spaces_by_street = [
-            [
-                SpaceBuilder(
+        self.spaces_by_street = list()
+        for street in self.streets:
+            num_subspaces = street.subspaces_per_street
+            street_subspace: list[Space] = list()
+            for subspace_index in range(num_subspaces):
+                subspace = Space(
                     street_index=street.index,
-                    street_space_index=street_space_index,
+                    street_space_index=subspace_index,
                 )
-                for street_space_index in range(street.spaces_in_between)
-            ]
-            for street in self.streets
-        ]
+                street_subspace.append(subspace)
+            self.spaces_by_street.append(street_subspace)
 
     def init_spaces_from_crossroads(self) -> None:
         self.spaces_from_crossroads = [
-            SpaceBuilder(
+            Space(
                 crossroad_index=crossroad.index,
             )
             for crossroad in self.crossroads
@@ -289,32 +304,33 @@ class GridMapBuilder(SupportsTextDiagnostics):
         for space_index, space in enumerate(self.spaces):
             space.set_index(space_index)
 
-    def connect_spaces(self) -> None:
-        for street_spaces in self.spaces_by_street:
-            for space in street_spaces:
-                assert space.is_from_street
-                street_index = space.street_index
-                street_space_index = space.street_space_index
-                street = self.streets[street_index]
-                if street_space_index == 0:
-                    space.connect(self.spaces_from_crossroads[street.crossroads[0].index].index)
-                else:
-                    space.connect(street_spaces[street_space_index - 1].index)
-                if street_space_index + 1 < street.spaces_in_between:
-                    space.connect(street_spaces[street_space_index + 1].index)
-                else:
-                    space.connect(self.spaces_from_crossroads[street.crossroads[1].index].index)
-        for space in self.spaces_from_crossroads:
-            assert space.is_from_crossroad
-            crossroad_index = space.crossroad_index
-            ### TODO incomplete
+    def connect_street_subspaces(self) -> None:
+        for street in self.streets:
+            num_subspaces = street.subspaces_per_street
+            street_subspace = self.spaces_by_street[street.index]
+            for subspace_index in range(num_subspaces - 1):
+                subspace_one = street_subspace[subspace_index]
+                subspace_two = street_subspace[subspace_index + 1]
+                ### mutually connected, by current design
+                subspace_one.connect(subspace_two)
+
+    def connect_street_crossroads(self) -> None:
+        for street in self.streets:
+            street_subspace = self.spaces_by_street[street.index]
+            crossroad_begin, crossroad_end = street.crossroads
+            space_crossroad_begin = self.spaces_from_crossroads[crossroad_begin.index]
+            space_crossroad_end = self.spaces_from_crossroads[crossroad_end.index]
+            subspace_first = street_subspace[0]
+            subspace_first.connect(space_crossroad_begin)
+            subspace_last = street_subspace[-1]
+            subspace_last.connect(space_crossroad_end)
 
 
 if __name__ == "__main__":
     builder = GridMapBuilder(
         num_lats = 5,
         num_lons = 5,
-        spaces_in_between = 3,
+        subspaces_per_street = 3,
     )
     print(builder.textdiag.str())
     builder.textdiag.print()
