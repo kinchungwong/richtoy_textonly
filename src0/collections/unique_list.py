@@ -1,34 +1,44 @@
-import builtins
-from collections.abc import Sequence, Mapping
-import inspect
+from collections.abc import Mapping, Sequence
 import typing
-from typing import TypeVar, Generic, Iterable, Callable, Optional, Union, Protocol
+from typing import Callable, Generic, Iterable, Protocol, TypeVar, Union
 
 
-_T_UniqueList = TypeVar("_T_UniqueList")
-_Self_UniqueList = TypeVar("_Self_UniqueList", bound="UniqueList")
+_T = TypeVar("_T")
+_TypeCheckList = Union[type, tuple[type]]
+_TypeCheckFunc = Callable[[typing.Any], bool]
 
 
-class UniqueList(Generic[_T_UniqueList], Sequence[_T_UniqueList]):
-    _items: list[_T_UniqueList]
-    _lookup: dict[_T_UniqueList, int]
-    _typecheck: Callable[[typing.Any], bool]
-    _expected_type: Optional[type]
+class UniqueList(Generic[_T], Sequence[_T]):
+    _items: list[_T]
+    _lookup: dict[_T, int]
+    _typecheck: Union[bool, _TypeCheckList, _TypeCheckFunc]
+    _can_clear: bool
 
     def __init__(
-        self, 
-        items: Iterable[_T_UniqueList] = None,
-        typecheck: Union[bool, type, Callable[[typing.Any], bool]] = False,
+        self,
+        items: Iterable[_T] = None,
+        typecheck: Union[bool, _TypeCheckList, _TypeCheckFunc] = False,
     ) -> None:
+        """
+        Initializes UniqueList, with options to pre-populate with items and
+        specify how item types should be validated.
+
+        Important:
+            As of Python 3.11, the __init__() of a generic class instance
+            does not have access to the type arguments. As a result,
+            using typecheck=True will have no effect on items added as part
+            of the __init__() function call.
+        """
         self._items = list()
         self._lookup = dict()
-        self._init_typecheck(typecheck)
-        if items is not None:
+        self._typecheck = typecheck
+        self._can_clear = True ### unless disable_clear() is called
+        if isinstance(items, Iterable):
             for item in items:
                 self.add(item)
 
-    def add(self, item: _T_UniqueList) -> int:
-        self._item_type_else_raise(item)
+    def add(self, item: _T) -> int:
+        self._validate_item(item)
         item_idx = self._lookup.get(item, -1)
         if item_idx >= 0:
             return item_idx
@@ -43,40 +53,67 @@ class UniqueList(Generic[_T_UniqueList], Sequence[_T_UniqueList]):
         else:
             return default
     
-    def index(self, item: _T_UniqueList, default: int = -1) -> int:
-        self._item_type_else_raise(item)
+    def index(self, item: _T, default: int = -1) -> int:
+        self._validate_item(item)
         return self._lookup.get(item, default)
 
-    def __getitem__(self, idx: int) -> _T_UniqueList:
-        result = self.get(idx)
-        if result is None:
-            raise self.BadIndexException(f"UniqueList: idx violates (0 <= (idx: {idx}) < (len: {len(self._items)}))")
-        return result
+    def __getitem__(self, idx: int) -> _T:
+        if 0 <= idx < len(self._items):
+            return self._items[idx]
+        else:
+            raise self.BadIndexException(idx, len(self._items))
     
     def __len__(self) -> int:
         return len(self._items)
 
-    def __iter__(self) -> Iterable[_T_UniqueList]:
+    def __iter__(self):
         yield from self._items
 
-    def enumerate(self) -> Iterable[tuple[int, _T_UniqueList]]:
+    def enumerate(self) -> Iterable[tuple[int, _T]]:
         for idx, item in enumerate(self._items):
             yield (idx, item)
 
-    def items(self) -> Iterable[tuple[_T_UniqueList, int]]:
+    def items(self) -> Iterable[tuple[_T, int]]:
         for idx, item in enumerate(self._items):
             yield (item, idx)
 
     def clear(self) -> None:
+        """Resets the UniqueList into an empty state. After resetting, 
+        the number of items is zero, and any items added afterwards will
+        start with index zero.
+        """
+        if not self._can_clear:
+            raise self.InvalidClearOperationException()
         self._items.clear()
         self._lookup.clear()
 
-    def sorted(self: _Self_UniqueList, reverse: bool = False) -> _Self_UniqueList:
-        items_list = list(self.items())
-        items_list.sort(reverse=reverse)
-        return UniqueList[_T_UniqueList](item for item, _ in items_list)
+    def disable_clear(self) -> None:
+        """Disables the clear() functionality, making it strictly
+        append-only. Once disabled, clear() cannot be re-enabled.
+        """
+        self._can_clear = False
+
+    def sorted(self, key: typing.Any = None, reverse: bool = False):
+        """Returns a newly constructed UniqueList containing the same items
+        but sorted using the items themselves.
+
+        Implementation:
+            Internally, sorting is performed with list.sort(), with optional
+            key and reverse arguments.
+        """
+        copied = self._items.copy()
+        if key is not None:
+            copied.sort(key=key, reverse=reverse)
+        else:
+            copied.sort(reverse=reverse)
+        new_list = UniqueList[_T]()
+        for item in copied:
+            new_list.add(item)
+        return new_list
 
     def __repr__(self) -> str:
+        """Formats all items on this UniqueList into a string via repr(item).
+        """
         classname = type(self).__name__
         text: list[str] = list()
         text.append(classname)
@@ -88,39 +125,36 @@ class UniqueList(Generic[_T_UniqueList], Sequence[_T_UniqueList]):
         text.append("])")
         return "".join(text)
 
-    def _item_type_else_raise(self, item: typing.Any) -> None:
-        if self._typecheck is None:
+    def _validate_item(self, item: typing.Any) -> None:
+        """
+        Validates the type of the item.
+        Important:
+            As of Python 3.11, self.__orig_class__ is not assigned until after 
+            __init__() has exited. Thus, use of this function has no effect if
+            the caller is __init__().
+        """
+        if self._typecheck is False:
             return
-        if not self._typecheck(item):
-            inspect_typecheck = inspect.getsource(self._typecheck)
-            raise self.ItemTypeException(
-                item=item, 
-                item_type=type(item),
-                expected_type=self._expected_type,
-                typecheck=inspect_typecheck, 
-            )
-
-    def _init_typecheck(
-        self, 
-        typecheck: Union[bool, type, Callable[[typing.Any], bool]],
-    ) -> None:
-        self._typecheck = None
-        self._expected_type = None
-        if typecheck is None or typecheck is False:
-            return
-        if typecheck is True:
-            # expected_type = typing.get_args(...)
-            raise self.TypeCheckSupportNotImplemented()
-        elif type(typecheck) == type or issubclass(typecheck, (type, Protocol)):
-            self._expected_type = typecheck
-        elif builtins.callable(typecheck):
-            self._typecheck = typecheck
+        if self._typecheck is True:
+            try:
+                expected_type = self.__orig_class__.__args__[0]
+            except:
+                return
+            if not isinstance(item, expected_type):
+                raise self.ItemTypeException(item, type(item), str(item))
+        elif isinstance(self._typecheck, type) or issubclass(type(self._typecheck), Protocol):
+            expected_type = self._typecheck
+            if not isinstance(item, expected_type):
+                raise self.ItemTypeException(item, type(item), str(item))
+        elif type(self._typecheck) == tuple:
+            expected_type_tups = self._typecheck
+            if not isinstance(item, expected_type_tups):
+                raise self.ItemTypeException(item, type(item), str(item))
+        elif callable(self._typecheck):
+            if not self._typecheck(item):
+                raise self.ItemTypeException(item, type(item), str(item))
         else:
-            raise Exception(f"Unable to process typecheck argument: {type(typecheck)}, {str(typecheck)}")
-        if self._typecheck is None and self._expected_type is not None:
-            def fn_typecheck_auto(item: typing.Any) -> bool:
-                return item is not None and isinstance(item, self._expected_type)
-            self._typecheck = fn_typecheck_auto
+            return
 
 
     class UniqueListException(Exception):
@@ -132,17 +166,16 @@ class UniqueList(Generic[_T_UniqueList], Sequence[_T_UniqueList]):
             super().__init__(self._args, self._kwargs)
 
     class BadIndexException(UniqueListException):
-        pass
-
-    class ItemNotFoundException(UniqueListException):
-        pass
+        EXC_MESSAGE = "UniqueList: bad index."
+        def __init__(self, *args, **kwargs) -> None:
+            super().__init__(*[self.EXC_MESSAGE, *args], **kwargs)
 
     class ItemTypeException(UniqueListException):
         EXC_MESSAGE = "UniqueList: bad item type."
         def __init__(self, *args, **kwargs) -> None:
             super().__init__(*[self.EXC_MESSAGE, *args], **kwargs)
 
-    class TypeCheckSupportNotImplemented(UniqueListException):
-        EXC_MESSAGE = "As of Python 3.11 has no access to the type-erased type argument inside a generic class."
+    class InvalidClearOperationException(UniqueListException):
+        EXC_MESSAGE = "UniqueList: clear() has been disabled on this list."
         def __init__(self, *args, **kwargs) -> None:
             super().__init__(*[self.EXC_MESSAGE, *args], **kwargs)
