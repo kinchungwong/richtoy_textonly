@@ -1,6 +1,10 @@
+import builtins
 from collections.abc import Sequence, Mapping
 import typing
+from typing import Union, ForwardRef
 
+
+SettableIndex = ForwardRef("SettableIndex")
 
 class SettableIndex:
     _value: int
@@ -38,6 +42,19 @@ class SettableIndex:
             return str(self._value)
         else:
             return "NotSet"
+
+    def __hash__(self) -> int:
+        return builtins.hash(builtins.id(self)) ^ builtins.hash(self._value)
+
+    def __eq__(self, other: Union[SettableIndex, int]) -> bool:
+        if self is other:
+            return True
+        if isinstance(other, SettableIndex):
+            return self._value == other._value
+        elif type(other) == int:
+            return self._value == other
+        else:
+            return False
 
     class SettableIndexExeption(Exception):
         _args: Sequence[typing.Any]

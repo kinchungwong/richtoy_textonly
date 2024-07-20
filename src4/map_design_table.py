@@ -8,7 +8,7 @@ from src0.collections.unique_list import UniqueList
 from src0.collections.bimap import Bimap
 
 
-from src4.settable_index import SettableIndex
+from src0.misc.settable_index import SettableIndex
 from src4.map_types import Crossroad, Street
 
 
