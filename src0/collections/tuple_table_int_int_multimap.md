@@ -41,3 +41,13 @@ Instead, it provides several views that implement protocols.
 
 The separation, as well as the decision not to provide an ```__len__()``` method,
 is intended to prevent the conflicting expectations on these two views.
+
+### Code implementation of the IntIntMultimap
+
+An initial code draft was proven to be inadequate and inconsistent. Unit test
+failures revealed that the two views require different behaviors, and cannot
+be implemented on the object itself. Instead, views (proxies) must be used.
+
+To simplify the two-views proof-of-concept, it is decided that the singleton
+optimization (for keys that are only mapped to one value, an ```int``` is used
+instead of a ```set[int]```) will not be implemented, at least initially.
