@@ -12,12 +12,83 @@ from src0.collections.int_int_multimap import IntIntMultimap
 
 IntIntMultimapTest = ForwardRef("IntIntMultimapTest")
 
-    def test_items_expect_noexec(self):
-        obj = IntIntMultimap()
-        for _, _ in obj.items():
-            self.fail("When empty, iterating on obj.items() should not have received values.")
 
-    def test_contains_key(self):
+if __name__ == "__main__":
+    orig_stdout = sys.stdout
+    def trace_print(*args, **kwargs):
+        kwargs["file"] = orig_stdout
+        builtins.print(*args, **kwargs)
+
+
+@dataclass
+class _TestData:
+    _items: Iterable[tuple[int, int]]
+    _keys: tuple[int, ...]
+    _notkeys: tuple[int, ...]
+    _values: tuple[int, ...]
+    _notvalues: tuple[int, ...]
+
+
+class TestData:
+    @staticmethod
+    def empty() -> _TestData:
+        trace_print(inspect.currentframe().f_code.co_name)
+        return _TestData(
+            _items = tuple(),
+            _keys = tuple(),
+            _notkeys = (-1, 0, 1, 2, 3),
+            _values = tuple(),
+            _notvalues = (-1, 0, 1, 2, 3),
+        )
+
+    @staticmethod
+    def single_item() -> _TestData:
+        trace_print(inspect.currentframe().f_code.co_name)
+        return _TestData(
+            _items = ((1, 2),),
+            _keys = (1,),
+            _notkeys = (-1, 0, 2, 3),
+            _values = (2,),
+            _notvalues = (-1, 0, 1, 3),
+        )
+
+    @staticmethod
+    def two_different_keys() -> _TestData:
+        trace_print(inspect.currentframe().f_code.co_name)
+        return _TestData(
+            _items = ((1, 2), (3, 4)),
+            _keys = (1, 3),
+            _notkeys = (-1, 0, 2, 4),
+            _values = (2, 4),
+            _notvalues = (-1, 0, 1, 3),
+        )    
+
+    @staticmethod
+    def same_key_two_values() -> _TestData:
+        trace_print(inspect.currentframe().f_code.co_name)
+        return _TestData(
+            _items = ((1, 2), (1, 3)),
+            _keys = (1,),
+            _notkeys = (-1, 0, 2, 3, 4),
+            _values = (2, 3),
+            _notvalues = (-1, 0, 1, 4),
+        )
+
+    @staticmethod
+    def two_symmetric() -> _TestData:
+        trace_print(inspect.currentframe().f_code.co_name)
+        return _TestData(
+            _items = ((1, 2), (2, 1),),
+            _keys = (1, 2),
+            _notkeys = (-1, 0, 3, 4),
+            _values = (1, 2),
+            _notvalues = (-1, 0, 3, 4),
+        )
+
+class TestMethods:
+    @staticmethod
+    def test_init(assertions: unittest.TestCase, data: _TestData):
+        trace_print(inspect.currentframe().f_code.co_name)
         obj = IntIntMultimap()
         assertions.assertEqual(obj.total, 0)
         for key in obj.keys():
