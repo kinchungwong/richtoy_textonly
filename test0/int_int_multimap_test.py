@@ -138,8 +138,36 @@ class TestMethods:
         assertions.assertEqual(len(keys_from_obj), 0)
         for key in keys_from_obj:
             assertions.fail()
+        assertions.assertEqual(len(obj.items()), 0)
         for key, value in obj.items():
-            pass
+            assertions.fail()
+        assertions.assertEqual(len(obj.value_sets()), 0)
+        for key in data._keys:
+            assertions.assertNotIn(key, keys_from_obj)
+        value_sets_from_pbj = obj.value_sets()
+        for key in value_sets_from_pbj:
+            assertions.fail()
+        for key in data._keys:
+            assertions.assertNotIn(key, value_sets_from_pbj)
+
+    @staticmethod
+    def test_discard_iter(assertions: unittest.TestCase, data: _TestData):
+        trace_print(inspect.currentframe().f_code.co_name)
+        obj = IntIntMultimap()
+        for key, value in data._items:
+            obj.add(key, value)
+        for key, value in data._items:
+            obj.discard(key, value)
+        assertions.assertEqual(obj.total, 0)
+        for key in obj.keys():
+            assertions.fail()
+        for key, value in obj.items():
+            assertions.fail()
+        for key in data._keys:
+            assertions.assertNotIn(key, obj.keys())
+        ### TODO check if value_sets() can iterate on (key, values)
+        # for key, values in obj.value_sets():
+        #     assertions.fail()
         
 
 class IntIntMultimapTest(unittest.TestCase):
@@ -161,6 +189,7 @@ class IntIntMultimapTest(unittest.TestCase):
             TestMethods.test_total,
             TestMethods.test_keys,
             TestMethods.test_clear,
+            TestMethods.test_discard_iter,
         ]
         for data_idx, data_method in enumerate(data_methods):
             for assert_idx, assert_method in enumerate(assert_methods):

@@ -118,7 +118,7 @@ class _PairSetView(MutableSet[_KeyValuePair]):
                 yield (key, value)
 
     def __len__(self) -> int:
-        return self._owner.total()
+        return self._owner.total
         
     def add(self, key_value: _KeyValuePair) -> None:
         self._owner._add_kv_return_vs(key_value[0], key_value[1])
@@ -208,13 +208,15 @@ class IntIntMultimap(_IIMM_Mutator):
         return self._dict[key]
 
     def _rm_kv_return_vs(self, key: _KeyType, value: _ValueType) -> Optional[set[_ValueType]]:
-        ### NOTE to prevent ABA problems, empty sets are not removed from the dictionary.
         if key not in self._dict:
             return None
         if value in self._dict[key]:
             self._dict[key].discard(value)
             self._total -= 1
-        return self._dict[key]
+        if len(self._dict[key]) > 0:
+            return self._dict[key]
+        self._dict.pop(key)
+        return None
 
     def _get_dict(self) -> dict[_KeyType, set[_ValueType]]:
         return self._dict
