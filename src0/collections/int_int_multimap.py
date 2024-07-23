@@ -66,6 +66,9 @@ class IIMM2(Mapping[_KT, MutableSet[_VT]], HasItemsView, HasValuesView):
     def __iter__(self) -> Iterable[_KT]:
         yield from self._dict
 
+    def __contains__(self, key: _KT) -> bool:
+        return key in self._dict
+
     def __getitem__(self, key: _KT) -> ValuesView:
         return ValuesView(self, key)
 
@@ -77,12 +80,18 @@ class IIMM2(Mapping[_KT, MutableSet[_VT]], HasItemsView, HasValuesView):
     def total(self) -> int:
         return self._total
 
+    @overload
+    def add_item(self, key: _KT, value: _VT) -> bool: ...
+
+    @overload
+    def add_item(self, key_value: tuple[_KT, _VT]) -> bool: ...
+
     def add_item(self, *args, **kwargs) -> bool:
         _METHOD_NAME = f"{type(self).__name__}.add_item()"
         (k, v) = self._internal_parse_kv(_METHOD_NAME, *args, **kwargs)
         old_total = self._total
         if k not in self._dict:
-            self._dict[k] = set[_VT](v)
+            self._dict[k] = set[_VT]((v,))
             self._total += 1
         else:
             vs = self._dict[k]
@@ -90,6 +99,12 @@ class IIMM2(Mapping[_KT, MutableSet[_VT]], HasItemsView, HasValuesView):
                 vs.add(v)
                 self._total += 1
         return self._total > old_total    
+
+    @overload
+    def discard_item(self, key: _KT, value: _VT) -> bool: ...
+
+    @overload
+    def discard_item(self, key_value: tuple[_KT, _VT]) -> bool: ...
 
     def discard_item(self, *args, **kwargs) -> bool:
         _METHOD_NAME = f"{type(self).__name__}.discard_item()"
@@ -117,20 +132,6 @@ class IIMM2(Mapping[_KT, MutableSet[_VT]], HasItemsView, HasValuesView):
         for k, v in items:
             self.discard_item(k, v)
         return old_total - self._total
-
-    ### Overloads
-
-    @overload
-    def add_item(self, key: _KT, value: _VT) -> bool: ...
-
-    @overload
-    def add_item(self, key_value: tuple[_KT, _VT]) -> bool: ...
-
-    @overload
-    def discard_item(self, key: _KT, value: _VT) -> bool: ...
-
-    @overload
-    def discard_item(self, key_value: tuple[_KT, _VT]) -> bool: ...
 
     ### Internal methods
 
@@ -205,14 +206,15 @@ class ItemsView(MutableSet[tuple[_KT, _VT]]):
     @overload
     def add(self, key_value: tuple[_KT, _VT]) -> None: ...
 
+    def add(self, *args, **kwargs) -> None:
+        self._iimm.add_item(*args, **kwargs)
+
+
     @overload
     def discard(self, key: _KT, value: _VT) -> None: ...
 
     @overload
     def discard(self, key_value: tuple[_KT, _VT]) -> None: ...
-
-    def add(self, *args, **kwargs) -> None:
-        self._iimm.add_item(*args, **kwargs)
 
     def discard(self, *args, **kwargs) -> None:
         self._iimm.discard_item(*args, **kwargs)
