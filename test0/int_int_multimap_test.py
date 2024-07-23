@@ -16,6 +16,8 @@ from src0.collections.int_int_multimap import ValuesView as IIMM2_ValuesView
 IntIntMultimapTest = ForwardRef("IntIntMultimapTest")
 Assertions = TypeVar("Assertions", unittest.TestCase, IntIntMultimapTest)
 TestSubject = TypeVar("TestSubject", IntIntMultimap, IIMM2_ItemsView, IIMM2_ValuesView)
+ContentType = TypeVar("ContentType")
+KeyType = TypeVar("KeyType")
 
 
 if __name__ == "__main__":
@@ -185,6 +187,41 @@ class TestSubjectFactory():
                 raise Exception("Unhandled enum")
 
 
+class ContainerChecker(Generic[Assertions, TestSubject, ContentType]):
+    _assertions: Assertions
+    _subject: TestSubject
+    _expected_contains: list[ContentType]
+    _expected_not_contains: list[ContentType]
+
+    def __init__(
+        self, 
+        assertions: Assertions, 
+        subject: TestSubject, 
+        expected_contains: Iterable[ContentType],
+        expected_not_contains: Iterable[ContentType],
+    ) -> None:
+        self._assertions = assertions
+        self._subject = subject
+        self._expected_contains = list(expected_contains)
+        self._expected_not_contains = list(expected_not_contains)
+
+    def expected_contains_returns_true_var1(self):
+        for content in self._expected_contains:
+            self._assertions.assertTrue(self._subject.__contains__(content))
+
+    def expected_contains_returns_true_var2(self):
+        for content in self._expected_contains:
+            self._assertions.assertIn(content, self._subject)
+
+    def not_expected_contains_returns_false_var1(self):
+        for not_content in self._expected_not_contains:
+            self._assertions.assertFalse(self._subject.__contains__(not_content))
+
+    def not_expected_contains_returns_false_var2(self):
+        for not_content in self._expected_not_contains:
+            self._assertions.assertNotIn(not_content, self._subject)
+
+
 class SizedChecker(Generic[Assertions, TestSubject]):
     _assertions: Assertions
     _subject: TestSubject
@@ -205,23 +242,23 @@ class SizedChecker(Generic[Assertions, TestSubject]):
         self._assertions.assertGreaterEqual(value, 0)
 
 
-class IterableChecker(Generic[Assertions, TestSubject]):
+class IterableChecker(Generic[Assertions, TestSubject, ContentType]):
     _assertions: Assertions
     _subject: TestSubject
     _expected_length: int
-    _type_check: Callable[[typing.Any], bool]
+    _iter_content_check: Callable[[ContentType], bool]
 
     def __init__(
         self, 
         assertions: Assertions,
         subject: TestSubject,
         expected_length: int,
-        type_check: Callable[[typing.Any], bool],
+        iter_content_check: Callable[[ContentType], bool],
     ) -> None:
         self._assertions = assertions
         self._subject = subject
         self._expected_length = expected_length
-        self._type_check = type_check
+        self._iter_content_check = iter_content_check
 
     def can_iter_unless_empty(self):
         """Checks that, if the object is presumed to be not empty, its iterator will yield something.
@@ -241,117 +278,194 @@ class IterableChecker(Generic[Assertions, TestSubject]):
             actual_count += 1
         self._assertions.assertEqual(actual_count, self._expected_length)
 
-    def iter_type_check(self):
+    def iter_content_type_check(self):
         for iter_content in self._subject:
-            self._assertions.assertTrue(self._type_check(iter_content))
+            self._assertions.assertTrue(self._iter_content_check(iter_content))
      
 
-class MappingChecker(Generic[Assertions, TestSubject]):
+class MappingChecker(Generic[Assertions, TestSubject, KeyType, ContentType]):
     _assertions: Assertions
     _subject: TestSubject
-    _value_check_fn: Callable[[typing.Any], bool]
-    _non_keys: Iterable[typing.Any]
+    _getitem_content_check: Callable[[ContentType], bool]
+    _keys: Iterable[KeyType]
+    _non_keys: Iterable[KeyType]
 
     def __init__(
         self, 
         assertions: Assertions, 
         subject: TestSubject,
-        value_check_fn: Callable[[typing.Any], bool],
-        non_keys: Iterable[typing.Any],
+        getitem_content_check: Callable[[ContentType], bool],
+        keys: Iterable[KeyType],
+        non_keys: Iterable[KeyType],
     ) -> None:
         self._assertions = assertions
         self._subject = subject
-        self._value_check_fn = value_check_fn
+        self._getitem_content_check = getitem_content_check
+        self._keys = keys
         self._non_keys = non_keys
 
     def iter_yields_keys_implies_contains_var1(self):
         for key in self._subject:
+            self._assertions.assertIn(key, self._subject)
+
+    @unittest.skip("Redundant because guaranteed by language.")
+    def _SKIP_iter_yields_keys_implies_contains_var2(self):
+        for key in self._subject:
             self._assertions.assertTrue(self._subject.__contains__(key))
-        
-    def iter_yields_keys_implies_contains_var2(self):
+
+    @unittest.skip("Redundant because guaranteed by language.")
+    def _SKIP_iter_yields_keys_implies_contains_var3(self):
         for key in self._subject:
             self._assertions.assertTrue(key in self._subject)
-
-    def iter_yields_keys_implies_contains_var3(self):
-        for key in self._subject:
-            self._assertions.assertIn(key, self._subject)
 
     def iter_yields_keys_can_getitem_var1(self):
         for key in self._subject:
             _ = self._subject.__getitem__(key)
 
-    def iter_yields_keys_can_getitem_var2(self):
+    def _SKIP_iter_yields_keys_can_getitem_var2(self):
         for key in self._subject:
             _ = self._subject[key]
 
-    def getitem_type_check(self):
+    def getitem_content_check(self):
         for key in self._subject:
             value = self._subject[key]
-            self._assertions.assertTrue(self._value_check_fn(value))
+            self._assertions.assertTrue(self._getitem_content_check(value))
 
-    def nonkeys_contains_false_var1(self):
-        """Checks that, for each of the provided "non-keys",
-        the test subject should return false for membership.
-        """
-        for nk in self._non_keys:
-            self._assertions.assertFalse(self._subject.__contains__(nk))
+    def keys_in_mapping_returns_false(self):
+        for key in self._keys:
+            self._assertions.assertIn(key, self._subject)
 
-    def nonkeys_contains_false_var2(self):
-        for nk in self._non_keys:
-            self._assertions.assertFalse(nk in self._subject)
-
-    def nonkeys_contains_false_var3(self):
+    def nonkeys_in_mapping_returns_false(self):
         for nk in self._non_keys:
             self._assertions.assertNotIn(nk, self._subject)
 
+    @unittest.skip("Redundant because guaranteed by language.")
+    def _SKIP_nonkeys_in_mapping_returns_false_var2(self):
+        for nk in self._non_keys:
+            self._assertions.assertFalse(self._subject.__contains__(nk))
+
+    @unittest.skip("Redundant because guaranteed by language.")
+    def _SKIP_nonkeys_in_mapping_returns_false_var3(self):
+        for nk in self._non_keys:
+            self._assertions.assertFalse(nk in self._subject)
+
 
 class IntIntMultimapTest(unittest.TestCase):
+    container_checker_methods = MethodList(ContainerChecker)
     sized_checker_methods = MethodList(SizedChecker)
     iterable_checker_methods = MethodList(IterableChecker)
     mapping_checker_methods = MethodList(MappingChecker)
 
     def setUp(self):
         self.data_factory = TestDataFactory()
+        self.named_data_factories = list(self.data_factory.named_cases())
+        self.named_subject_factories = [
+            (data_name, init_mode.name, test_data, TestSubjectFactory(test_data, init_mode))
+            for data_name, test_data in self.named_data_factories
+            for init_mode in list(SubjectInitMode)
+        ]
 
-    def test(self):
-        for data_name, test_data in self.data_factory.named_cases():
-            for init_mode in list(SubjectInitMode):
-                init_mode_name = init_mode.name
-                subject_factory = TestSubjectFactory(test_data, init_mode)
-                ### Idiom checks on subject: (Sized, Iterable, Mapping)
-                ### SizedChecker on subject
-                for test_name in self.sized_checker_methods.names():
-                    full_name = ",".join((data_name, init_mode_name, test_name))
-                    trace_print(full_name)
-                    with self.subTest(full_name):
-                        ### All test code must be inside the subTest() block.
-                        subject = subject_factory.create()
-                        checker = SizedChecker(self, subject)
-                        test_method = self.sized_checker_methods.get_callable(checker, test_name)
-                        test_method()
-                ### IterableChecker on subject
-                for test_name in self.iterable_checker_methods.names():
-                    full_name = ",".join((data_name, init_mode_name, test_name))
-                    trace_print(full_name)
-                    with self.subTest(full_name):
-                        ### All test code must be inside the subTest() block.
-                        subject = subject_factory.create()
-                        key_check = lambda k: type(k) == int
-                        expected_key_count = len(set(test_data.keys))
-                        checker = IterableChecker(self, subject, expected_key_count, key_check)
-                        test_method = self.iterable_checker_methods.get_callable(checker, test_name)
-                        test_method()
-                ### MappingChecker on subject
-                for test_name in self.mapping_checker_methods.names():
-                    full_name = ",".join((data_name, init_mode_name, test_name))
-                    trace_print(full_name)
-                    with self.subTest(full_name):
-                        ### All test code must be inside the subTest() block.
-                        subject = subject_factory.create()
-                        value_check = lambda vs: all(v in test_data.values for v in vs) and not any(v in vs for v in test_data.notvalues)
-                        checker = MappingChecker(self, subject, value_check, test_data.notkeys)
-                        test_method = self.mapping_checker_methods.get_callable(checker, test_name)
-                        test_method()
+    def test_sized_on_iimm(self):
+        cur_method_name = inspect.currentframe().f_code.co_name
+        methods_list = self.sized_checker_methods
+        for test_name in methods_list.names():
+            for data_name, init_mode_name, test_data, subject_factory in self.named_subject_factories:
+                full_name = ",".join((cur_method_name, data_name, init_mode_name, test_name))
+                trace_print(full_name)
+                with self.subTest(full_name):
+                    ### All test code must be inside the subTest() block.
+                    subject = subject_factory.create()
+                    checker = SizedChecker(self, subject)
+                    test_method = methods_list.get_callable(checker, test_name)
+                    test_method()
+
+    def test_iterable_on_iimm(self):
+        cur_method_name = inspect.currentframe().f_code.co_name
+        methods_list = self.iterable_checker_methods
+        for test_name in methods_list.names():
+            for data_name, init_mode_name, test_data, subject_factory in self.named_subject_factories:
+                full_name = ",".join((cur_method_name, data_name, init_mode_name, test_name))
+                trace_print(full_name)
+                with self.subTest(full_name):
+                    ### All test code must be inside the subTest() block.
+                    subject = subject_factory.create()
+                    key_check = lambda k: type(k) == int
+                    expected_key_count = len(set(test_data.keys))
+                    checker = IterableChecker(self, subject, expected_key_count, key_check)
+                    test_method = methods_list.get_callable(checker, test_name)
+                    test_method()
+
+    def test_mapping_int2valueset_on_iimm(self):
+        cur_method_name = inspect.currentframe().f_code.co_name
+        methods_list = self.mapping_checker_methods
+        for test_name in methods_list.names():
+            for data_name, init_mode_name, test_data, subject_factory in self.named_subject_factories:
+                full_name = ",".join((cur_method_name, data_name, init_mode_name, test_name))
+                trace_print(full_name)
+                with self.subTest(full_name):
+                    ### All test code must be inside the subTest() block.
+                    subject = subject_factory.create()
+                    valueset_type_check = lambda vs: all(type(v) == int for v in vs)
+                    valueset_content_accepted = lambda vs: all(v in test_data.values for v in vs)
+                    valueset_content_not_accepted = lambda vs: not any(v in vs for v in test_data.notvalues)
+                    valueset_check = lambda vs: valueset_type_check(vs) and valueset_content_accepted(vs) and valueset_content_not_accepted(vs)
+                    checker = MappingChecker(self, subject, valueset_check, test_data.keys, test_data.notkeys)
+                    test_method = methods_list.get_callable(checker, test_name)
+                    test_method()
+
+    def test_sized_on_itemsview(self):
+        cur_method_name = inspect.currentframe().f_code.co_name
+        methods_list = self.sized_checker_methods
+        for test_name in methods_list.names():
+            for data_name, init_mode_name, test_data, subject_factory in self.named_subject_factories:
+                full_name = ",".join((cur_method_name, data_name, init_mode_name, test_name))
+                trace_print(full_name)
+                with self.subTest(full_name):
+                    ### All test code must be inside the subTest() block.
+                    subject = subject_factory.create()
+                    checker = SizedChecker(self, subject.items())
+                    test_method = methods_list.get_callable(checker, test_name)
+                    test_method()
+
+    def test_iterable_kvp_on_itemsview(self):
+        cur_method_name = inspect.currentframe().f_code.co_name
+        methods_list = self.iterable_checker_methods
+        for test_name in methods_list.names():
+            for data_name, init_mode_name, test_data, subject_factory in self.named_subject_factories:
+                full_name = ",".join((cur_method_name, data_name, init_mode_name, test_name))
+                trace_print(full_name)
+                with self.subTest(full_name):
+                    ### All test code must be inside the subTest() block.
+                    subject = subject_factory.create()
+                    kvp_type_check = lambda kv: type(kv) == tuple and len(kv) == 2 and type(kv[0]) == int and type(kv[1]) == int
+                    kvp_content_check = lambda kv: kv in test_data.items
+                    kvp_check = lambda kv: kvp_type_check(kv) and kvp_content_check(kv)
+                    expected_count = len(set(test_data.items))
+                    checker = IterableChecker(self, subject.items(), expected_count, kvp_check)
+                    test_method = methods_list.get_callable(checker, test_name)
+                    test_method()
+
+    def test_container_on_itemsview(self):
+        cur_method_name = inspect.currentframe().f_code.co_name
+        methods_list = self.container_checker_methods
+        for test_name in methods_list.names():
+            for data_name, init_mode_name, test_data, subject_factory in self.named_subject_factories:
+                full_name = ",".join((cur_method_name, data_name, init_mode_name, test_name))
+                trace_print(full_name)
+                with self.subTest(full_name):
+                    ### All test code must be inside the subTest() block.
+                    subject = subject_factory.create()
+                    expected_contains = test_data.items
+                    expected_not_contains = [
+                        (not_key, not_value)
+                        for not_key in test_data.notkeys
+                        for not_value in test_data.notvalues
+                    ]
+                    checker = ContainerChecker(self, subject.items(), expected_contains, expected_not_contains)
+                    test_method = methods_list.get_callable(checker, test_name)
+                    test_method()
+
+    ### TODO : tests on discard(), discard_item(), discard_items(), clear(), total()
 
 
 if __name__ == "__main__":
