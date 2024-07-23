@@ -7,7 +7,7 @@ from typing import ForwardRef
 import unittest
 
 
-from src0.collections.int_int_multimap_old import IntIntMultimap
+from src0.collections.int_int_multimap_old import IntIntMultimapOld
 
 
 IntIntMultimapTest = ForwardRef("IntIntMultimapTest")
@@ -89,7 +89,7 @@ class TestMethods:
     @staticmethod
     def test_init(assertions: unittest.TestCase, data: _TestData):
         trace_print(inspect.currentframe().f_code.co_name)
-        obj = IntIntMultimap()
+        obj = IntIntMultimapOld()
         assertions.assertEqual(obj.total, 0)
         for key in obj.keys():
             assertions.fail()
@@ -99,14 +99,14 @@ class TestMethods:
     @staticmethod
     def test_add_smoke(assertions: unittest.TestCase, data: _TestData):
         trace_print(inspect.currentframe().f_code.co_name)
-        obj = IntIntMultimap()
+        obj = IntIntMultimapOld()
         for key, value in data._items:
             obj.add(key, value)
 
     @staticmethod
     def test_total(assertions: unittest.TestCase, data: _TestData):
         trace_print(inspect.currentframe().f_code.co_name)
-        obj = IntIntMultimap()
+        obj = IntIntMultimapOld()
         for key, value in data._items:
             obj.add(key, value)
         assertions.assertEqual(obj.total, len(data._items))
@@ -114,7 +114,7 @@ class TestMethods:
     @staticmethod
     def test_keys(assertions: unittest.TestCase, data: _TestData):
         trace_print(inspect.currentframe().f_code.co_name)
-        obj = IntIntMultimap()
+        obj = IntIntMultimapOld()
         for key, value in data._items:
             obj.add(key, value)
         keys_from_obj = obj.keys()
@@ -129,7 +129,7 @@ class TestMethods:
     @staticmethod
     def test_clear(assertions: unittest.TestCase, data: _TestData):
         trace_print(inspect.currentframe().f_code.co_name)
-        obj = IntIntMultimap()
+        obj = IntIntMultimapOld()
         for key, value in data._items:
             obj.add(key, value)
         obj.clear()
@@ -153,7 +153,7 @@ class TestMethods:
     @staticmethod
     def test_discard_iter(assertions: unittest.TestCase, data: _TestData):
         trace_print(inspect.currentframe().f_code.co_name)
-        obj = IntIntMultimap()
+        obj = IntIntMultimapOld()
         for key, value in data._items:
             obj.add(key, value)
         for key, value in data._items:

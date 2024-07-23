@@ -11,7 +11,7 @@ from typing import overload, runtime_checkable
 _KT = int
 _VT = int
 
-IIMM2 = ForwardRef("IIMM2")
+IntIntMultimap = ForwardRef("IntIntMultimap")
 ItemsView = ForwardRef("ItemsView")
 ValuesView = ForwardRef("ValuesView")
 
@@ -33,7 +33,7 @@ class HasValuesView(Protocol):
     def __getitem__(self, key: _KT) -> ValuesView: ...
 
 
-class IIMM2(Mapping[_KT, MutableSet[_VT]], HasItemsView, HasValuesView):
+class IntIntMultimap(Mapping[_KT, MutableSet[_VT]], HasItemsView, HasValuesView):
     _dict: dict[_KT, set[_VT]]
     _total: int
     _items: ItemsView
@@ -43,7 +43,7 @@ class IIMM2(Mapping[_KT, MutableSet[_VT]], HasItemsView, HasValuesView):
         items: Iterable[tuple[_KT, _VT]] = None,
         other: HasItemsView = None,
     ) -> None:
-        if type(self) != IIMM2:
+        if type(self) != IntIntMultimap:
             raise Exception("Subclassing not allowed.")
         self.clear()
         if items is not None:
@@ -166,12 +166,12 @@ class IIMM2(Mapping[_KT, MutableSet[_VT]], HasItemsView, HasValuesView):
 
 
 class ItemsView(MutableSet[tuple[_KT, _VT]]):
-    _iimm: IIMM2
+    _iimm: IntIntMultimap
 
-    def __init__(self, iimm: IIMM2) -> None:
+    def __init__(self, iimm: IntIntMultimap) -> None:
         if type(self) != ItemsView:
             raise Exception("Subclassing not allowed.")
-        if type(iimm) != IIMM2:
+        if type(iimm) != IntIntMultimap:
             raise Exception("Subclassing not allowed.")
         self._iimm = iimm
 
@@ -242,13 +242,13 @@ class ItemsView(MutableSet[tuple[_KT, _VT]]):
         return other is not self
 
 class ValuesView(collections.abc.ValuesView, Collection[_VT]):
-    _iimm: IIMM2
+    _iimm: IntIntMultimap
     _set: set[_VT]
 
-    def __init__(self, iimm: IIMM2, key: _KT) -> None:
+    def __init__(self, iimm: IntIntMultimap, key: _KT) -> None:
         if type(self) != ValuesView:
             raise Exception("Subclassing not allowed.")
-        if type(iimm) != IIMM2:
+        if type(iimm) != IntIntMultimap:
             raise Exception("Subclassing not allowed.")
         if type(key) != _KT:
             raise Exception("Wrong key type.")

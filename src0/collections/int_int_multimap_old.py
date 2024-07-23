@@ -3,7 +3,7 @@ from collections.abc import Mapping, Iterable, MutableSet
 from typing import ForwardRef, Optional
 
 
-IntIntMultimap = ForwardRef("IntIntMultimap")
+IntIntMultimapOld = ForwardRef("IntIntMultimapOld")
 _KeyType = int
 _ValueType = int
 _KeyValuePair = tuple[_KeyType, _ValueType]
@@ -127,7 +127,7 @@ class _PairSetView(MutableSet[_KeyValuePair]):
         self._owner._rm_kv_return_vs(key_value[0], key_value[1])
 
 
-class IntIntMultimap(_IIMM_Mutator):
+class IntIntMultimapOld(_IIMM_Mutator):
     _dict: dict[_KeyType, set[_ValueType]]
     _total: int
     _psv: _PairSetView
@@ -136,10 +136,10 @@ class IntIntMultimap(_IIMM_Mutator):
     def __init__(
         self,
         /,
-        _internal_from: IntIntMultimap = None,
+        _internal_from: IntIntMultimapOld = None,
     ) -> None:
         if _internal_from is not None:
-            assert isinstance(_internal_from, IntIntMultimap)
+            assert isinstance(_internal_from, IntIntMultimapOld)
             self._dict = _internal_from._dict.copy()
             self._total = _internal_from._total
         else:
@@ -161,7 +161,7 @@ class IntIntMultimap(_IIMM_Mutator):
         self._total = 0
 
     def copy(self):
-        return IntIntMultimap(_internal_from=self)
+        return IntIntMultimapOld(_internal_from=self)
 
     def __getitem__(self, key: _KeyType) -> _ValueSet:
         return _ValueSet(self, key)
