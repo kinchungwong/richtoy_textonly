@@ -7,7 +7,7 @@ from typing import ForwardRef
 import unittest
 
 
-from src0.collections.int_int_multimap import IntIntMultimap
+from src0.collections.int_int_multimap_old import IntIntMultimap
 
 
 IntIntMultimapTest = ForwardRef("IntIntMultimapTest")
