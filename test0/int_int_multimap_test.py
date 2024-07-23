@@ -13,8 +13,8 @@ from src0.collections.int_int_multimap import IntIntMultimap
 from src0.collections.int_int_multimap import ItemsView as IIMM2_ItemsView
 from src0.collections.int_int_multimap import ValuesView as IIMM2_ValuesView
 
-IIMM2Test = ForwardRef("IIMM2Test")
-Assertions = TypeVar("Assertions", unittest.TestCase, IIMM2Test)
+IntIntMultimapTest = ForwardRef("IntIntMultimapTest")
+Assertions = TypeVar("Assertions", unittest.TestCase, IntIntMultimapTest)
 TestSubject = TypeVar("TestSubject", IntIntMultimap, IIMM2_ItemsView, IIMM2_ValuesView)
 
 
@@ -305,7 +305,7 @@ class MappingChecker(Generic[Assertions, TestSubject]):
             self._assertions.assertNotIn(nk, self._subject)
 
 
-class IIMM2Test(unittest.TestCase):
+class IntIntMultimapTest(unittest.TestCase):
     sized_checker_methods = MethodList(SizedChecker)
     iterable_checker_methods = MethodList(IterableChecker)
     mapping_checker_methods = MethodList(MappingChecker)
