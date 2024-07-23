@@ -6,13 +6,16 @@ from enum import auto as enum_auto
 import inspect
 import sys
 import typing
-from typing import ForwardRef, Callable
+from typing import TypeVar, ForwardRef, Callable, Generic
 import unittest
 
-from src0.collections.int_int_multimap import IIMM2
+from src0.collections.int_int_multimap import IntIntMultimap
+from src0.collections.int_int_multimap import ItemsView as IIMM2_ItemsView
+from src0.collections.int_int_multimap import ValuesView as IIMM2_ValuesView
 
-Assertions = unittest.TestCase
-TestSubject = IIMM2
+IIMM2Test = ForwardRef("IIMM2Test")
+Assertions = TypeVar("Assertions", unittest.TestCase, IIMM2Test)
+TestSubject = TypeVar("TestSubject", IntIntMultimap, IIMM2_ItemsView, IIMM2_ValuesView)
 
 
 if __name__ == "__main__":
@@ -20,8 +23,6 @@ if __name__ == "__main__":
     def trace_print(*args, **kwargs):
         kwargs["file"] = orig_stdout
         builtins.print(*args, **kwargs)
-
-IIMM2Test = ForwardRef("IIMM2Test")
 
 
 class MethodList:
@@ -152,45 +153,45 @@ class SubjectInitMode(Enum):
     ADD_ITEMS_PLURAL = "ADD_ITEMS_PLURAL"
 
 
-class TestSubjectFactory:
+class TestSubjectFactory():
+    _subject_type = IntIntMultimap
     _test_data: TestData
     _init_mode: SubjectInitMode
-    _subject: TestSubject
 
     def __init__(self, test_data: TestData, init_mode: SubjectInitMode) -> None:
         assert isinstance(test_data, TestData)
         assert isinstance(init_mode, SubjectInitMode)
         self._test_data = test_data
         self._init_mode = init_mode
-        self._subject = None
 
-    @property
-    def subject(self) -> TestSubject:
-        if self._subject is None:
-            items = self._test_data.items
-            match self._init_mode:
-                case SubjectInitMode.AT_INIT:
-                    self._subject = TestSubject(items=items)
-                case SubjectInitMode.FROM_OTHER:
-                    dummy = TestSubject(items=items)
-                    self._subject = TestSubject(other=dummy)
-                case SubjectInitMode.ADD_ITEM_SINGLE:
-                    self._subject = TestSubject()
-                    for key, value in items:
-                        self._subject.add_item(key, value)
-                case SubjectInitMode.ADD_ITEMS_PLURAL:
-                    self._subject = TestSubject()
-                    self._subject.add_items(items)
-        return self._subject
+    def create(self) -> IntIntMultimap:
+        items = self._test_data.items
+        match self._init_mode:
+            case SubjectInitMode.AT_INIT:
+                return IntIntMultimap(items=items)
+            case SubjectInitMode.FROM_OTHER:
+                dummy = IntIntMultimap(items=items)
+                return IntIntMultimap(other=dummy)
+            case SubjectInitMode.ADD_ITEM_SINGLE:
+                subject = IntIntMultimap()
+                for key, value in items:
+                    subject.add_item(key, value)
+                return subject
+            case SubjectInitMode.ADD_ITEMS_PLURAL:
+                subject = IntIntMultimap()
+                subject.add_items(items)
+                return subject
+            case _:
+                raise Exception("Unhandled enum")
 
 
-class SizedChecker:
+class SizedChecker(Generic[Assertions, TestSubject]):
     _assertions: Assertions
     _subject: TestSubject
 
-    def __init__(self, **kwargs) -> None:
-        self._assertions = kwargs["assertions"]
-        self._subject = kwargs["subject"]
+    def __init__(self, assertions: Assertions, subject: TestSubject) -> None:
+        self._assertions = assertions
+        self._subject = subject
 
     def has_len(self):
         _ = len(self._subject)
@@ -204,7 +205,7 @@ class SizedChecker:
         self._assertions.assertGreaterEqual(value, 0)
 
 
-class IterableChecker:
+class IterableChecker(Generic[Assertions, TestSubject]):
     _assertions: Assertions
     _subject: TestSubject
     _expected_length: int
@@ -245,7 +246,7 @@ class IterableChecker:
             self._assertions.assertTrue(self._type_check(iter_content))
      
 
-class MappingChecker:
+class MappingChecker(Generic[Assertions, TestSubject]):
     _assertions: Assertions
     _subject: TestSubject
     _value_check_fn: Callable[[typing.Any], bool]
@@ -305,37 +306,51 @@ class MappingChecker:
 
 
 class IIMM2Test(unittest.TestCase):
+    sized_checker_methods = MethodList(SizedChecker)
+    iterable_checker_methods = MethodList(IterableChecker)
+    mapping_checker_methods = MethodList(MappingChecker)
+
+    def setUp(self):
+        self.data_factory = TestDataFactory()
 
     def test(self):
-        iterable_checker_methods = MethodList(IterableChecker)
-        mapping_checker_methods = MethodList(MappingChecker)
-        data_factory = TestDataFactory()
-        for data_name, test_data in data_factory.named_cases():
+        for data_name, test_data in self.data_factory.named_cases():
             for init_mode in list(SubjectInitMode):
                 init_mode_name = init_mode.name
                 subject_factory = TestSubjectFactory(test_data, init_mode)
-                ### IterableChecker on subject
-                for test_name in iterable_checker_methods.names():
+                ### Idiom checks on subject: (Sized, Iterable, Mapping)
+                ### SizedChecker on subject
+                for test_name in self.sized_checker_methods.names():
                     full_name = ",".join((data_name, init_mode_name, test_name))
                     trace_print(full_name)
                     with self.subTest(full_name):
                         ### All test code must be inside the subTest() block.
-                        subject = subject_factory.subject
+                        subject = subject_factory.create()
+                        checker = SizedChecker(self, subject)
+                        test_method = self.sized_checker_methods.get_callable(checker, test_name)
+                        test_method()
+                ### IterableChecker on subject
+                for test_name in self.iterable_checker_methods.names():
+                    full_name = ",".join((data_name, init_mode_name, test_name))
+                    trace_print(full_name)
+                    with self.subTest(full_name):
+                        ### All test code must be inside the subTest() block.
+                        subject = subject_factory.create()
                         key_check = lambda k: type(k) == int
                         expected_key_count = len(set(test_data.keys))
                         checker = IterableChecker(self, subject, expected_key_count, key_check)
-                        test_method = iterable_checker_methods.get_callable(checker, test_name)
+                        test_method = self.iterable_checker_methods.get_callable(checker, test_name)
                         test_method()
                 ### MappingChecker on subject
-                for test_name in mapping_checker_methods.names():
+                for test_name in self.mapping_checker_methods.names():
                     full_name = ",".join((data_name, init_mode_name, test_name))
                     trace_print(full_name)
                     with self.subTest(full_name):
                         ### All test code must be inside the subTest() block.
-                        subject = subject_factory.subject
+                        subject = subject_factory.create()
                         value_check = lambda vs: all(v in test_data.values for v in vs) and not any(v in vs for v in test_data.notvalues)
                         checker = MappingChecker(self, subject, value_check, test_data.notkeys)
-                        test_method = mapping_checker_methods.get_callable(checker, test_name)
+                        test_method = self.mapping_checker_methods.get_callable(checker, test_name)
                         test_method()
 
 
